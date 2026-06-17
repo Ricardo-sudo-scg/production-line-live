@@ -13,15 +13,18 @@ export default function PlayPage() {
 
   useEffect(() => {
     const savedSession = getSession();
+
     if (!savedSession) {
       window.location.href = "/";
       return;
     }
+
     setSession(savedSession);
   }, []);
 
   useEffect(() => {
     if (!session) return;
+
     const activeSession = session;
 
     async function loadOrders() {
@@ -103,13 +106,16 @@ export default function PlayPage() {
       error_count: 0,
     });
 
-    if (error) setMessage(error.message);
-    else setMessage(`Pedido ${product} creado.`);
+    if (error) {
+      setMessage(error.message);
+    } else {
+      setMessage(`Pedido ${product} creado.`);
+    }
   }
 
   async function updateOrder(order: Order, nextAction: string) {
     const now = new Date().toISOString();
-    let updateData: Record<string, string | number | null> = {};
+    let updateData: Record<string, unknown> = {};
 
     if (nextAction === "start_m1") {
       updateData = {
@@ -170,10 +176,16 @@ export default function PlayPage() {
       };
     }
 
-    const { error } = await supabase.from("orders").update(updateData).eq("id", order.id);
+    const { error } = await supabase
+      .from("orders")
+      .update(updateData)
+      .eq("id", order.id);
 
-    if (error) setMessage(error.message);
-    else setMessage("Pedido actualizado.");
+    if (error) {
+      setMessage(error.message);
+    } else {
+      setMessage("Pedido actualizado.");
+    }
   }
 
   function logout() {
@@ -201,6 +213,7 @@ export default function PlayPage() {
             Sala {session.roomCode} · Equipo {session.team} · Ronda {session.round}
           </p>
         </div>
+
         <div className="actions">
           <a className="button light-btn" href="/dashboard">
             Dashboard
@@ -216,7 +229,10 @@ export default function PlayPage() {
       {session.role === "Cliente" && (
         <section className="card">
           <h2>Crear pedido del cliente</h2>
-          <p>Presiona el producto que el cliente pide. El pedido aparecerá en la línea.</p>
+          <p>
+            Presiona el producto que el cliente pide. El pedido aparecerá en la línea.
+          </p>
+
           <div className="grid-3">
             {PRODUCTS.map((product) => (
               <button key={product} onClick={() => createOrder(product)}>
@@ -236,7 +252,9 @@ export default function PlayPage() {
               <div key={order.id} className="order-card">
                 <div className="order-title">
                   <strong>{order.product}</strong>
-                  <span className={`status ${order.status}`}>{statusLabel(order.status)}</span>
+                  <span className={`status ${order.status}`}>
+                    {statusLabel(order.status)}
+                  </span>
                 </div>
 
                 <p className="small">
@@ -245,33 +263,51 @@ export default function PlayPage() {
 
                 <div className="actions">
                   {session.role === "Montaje 1" && order.status === "pendiente" && (
-                    <button onClick={() => updateOrder(order, "start_m1")}>Tomar pedido</button>
+                    <button onClick={() => updateOrder(order, "start_m1")}>
+                      Tomar pedido
+                    </button>
                   )}
 
                   {session.role === "Montaje 1" && order.status === "montaje1" && (
-                    <button onClick={() => updateOrder(order, "finish_m1")}>Terminé Montaje 1</button>
+                    <button onClick={() => updateOrder(order, "finish_m1")}>
+                      Terminé Montaje 1
+                    </button>
                   )}
 
-                  {session.role === "Montaje 2" && order.status === "montaje1_terminado" && (
-                    <button onClick={() => updateOrder(order, "start_m2")}>Iniciar Montaje 2</button>
-                  )}
+                  {session.role === "Montaje 2" &&
+                    order.status === "montaje1_terminado" && (
+                      <button onClick={() => updateOrder(order, "start_m2")}>
+                        Iniciar Montaje 2
+                      </button>
+                    )}
 
                   {session.role === "Montaje 2" && order.status === "montaje2" && (
-                    <button onClick={() => updateOrder(order, "finish_m2")}>Terminé Montaje 2</button>
+                    <button onClick={() => updateOrder(order, "finish_m2")}>
+                      Terminé Montaje 2
+                    </button>
                   )}
 
-                  {session.role === "Calidad" && order.status === "montaje2_terminado" && (
-                    <>
-                      <button onClick={() => updateOrder(order, "quality_ok")}>OK</button>
-                      <button className="danger" onClick={() => updateOrder(order, "quality_error")}>
-                        Error
+                  {session.role === "Calidad" &&
+                    order.status === "montaje2_terminado" && (
+                      <>
+                        <button onClick={() => updateOrder(order, "quality_ok")}>
+                          OK
+                        </button>
+                        <button
+                          className="danger"
+                          onClick={() => updateOrder(order, "quality_error")}
+                        >
+                          Error
+                        </button>
+                      </>
+                    )}
+
+                  {session.role === "Despacho" &&
+                    order.status === "listo_para_entrega" && (
+                      <button onClick={() => updateOrder(order, "delivered")}>
+                        Entregado al cliente
                       </button>
-                    </>
-                  )}
-
-                  {session.role === "Despacho" && order.status === "listo_para_entrega" && (
-                    <button onClick={() => updateOrder(order, "delivered")}>Entregado al cliente</button>
-                  )}
+                    )}
                 </div>
               </div>
             ))}
