@@ -1,24 +1,21 @@
-import type { PlayerSession } from "./types";
+import type { PlayerSession } from './types'
 
-const SESSION_KEY = "production-line-live-session";
+const KEY = 'pll-session-v2'
 
-export function saveSession(session: PlayerSession) {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+export function saveSession(s: PlayerSession) {
+  if (typeof window === 'undefined') return
+  localStorage.setItem(KEY, JSON.stringify(s))
 }
 
 export function getSession(): PlayerSession | null {
-  if (typeof window === "undefined") return null;
-  const raw = localStorage.getItem(SESSION_KEY);
-  if (!raw) return null;
+  if (typeof window === 'undefined') return null
   try {
-    return JSON.parse(raw) as PlayerSession;
-  } catch {
-    return null;
-  }
+    const raw = localStorage.getItem(KEY)
+    return raw ? JSON.parse(raw) : null
+  } catch { return null }
 }
 
 export function clearSession() {
-  if (typeof window === "undefined") return;
-  localStorage.removeItem(SESSION_KEY);
+  if (typeof window === 'undefined') return
+  localStorage.removeItem(KEY)
 }

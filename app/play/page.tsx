@@ -1,323 +1,401 @@
-"use client";
+'use client'
 
-import { useEffect, useMemo, useState } from "react";
-import { supabase } from "../../lib/supabase";
-import { clearSession, getSession } from "../../lib/session";
-import { PRODUCTS, type Order, type PlayerSession, type Product } from "../../lib/types";
-import { getOrderCycleLabel, statusLabel } from "../../lib/metrics";
+import { useEffect, useState, useCallback } from 'react'
+import { supabase } from '../../lib/supabase'
+import { getSession, clearSession } from '../../lib/session'
+import { ORDER_STATUS_LABEL, PLAN_422, PLAN_844, PRODUCT_COLOR, type Order, type OvenBatch, type PlayerSession, type Room } from '../../lib/types'
+
+function productPill(p: string) {
+  const map: Record<string, string> = { Bicolor: 'pill-bc', Amarillo: 'pill-am', Rojo: 'pill-r' }
+  const short: Record<string, string> = { Bicolor: 'Bc', Amarillo: 'Am', Rojo: 'R' }
+  return <span className={map[p] || ''}>{short[p] || p}</span>
+}
 
 export default function PlayPage() {
-  const [session, setSession] = useState<PlayerSession | null>(null);
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [message, setMessage] = useState("");
+  const [session, setSession] = useState<PlayerSession | null>(null)
+  const [orders, setOrders] = useState<Order[]>([])
+  const [batches, setBatches] = useState<OvenBatch[]>([])
+  const [room, setRoom] = useState<Room | null>(null)
+  const [msg, setMsg] = useState('')
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const savedSession = getSession();
+    const s = getSession()
+    if (!s) { window.location.href = '/'; return }
+    setSession(s)
+  }, [])
 
-    if (!savedSession) {
-      window.location.href = "/";
-      return;
-    }
-
-    setSession(savedSession);
-  }, []);
+  const loadData = useCallback(async (s: PlayerSession) => {
+    const [{ data: o }, { data: b }, { data: r }] = await Promise.all([
+      supabase.from('orders').select('*').eq('room_id', s.roomId).eq('line', s.line).order('sequence_number'),
+      supabase.from('oven_batches').select('*').eq('room_id', s.roomId).eq('line', s.line).order('batch_number'),
+      supabase.from('rooms').select('*').eq('id', s.roomId).single(),
+    ])
+    setOrders((o || []) as Order[])
+    setBatches((b || []) as OvenBatch[])
+    setRoom(r as Room)
+    setLoading(false)
+  }, [])
 
   useEffect(() => {
-    if (!session) return;
+    if (!session) return
+    loadData(session)
+    const ch = supabase.channel('play-' + session.roomId + session.line)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `room_id=eq.${session.roomId}` }, () => loadData(session))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'oven_batches', filter: `room_id=eq.${session.roomId}` }, () => loadData(session))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms', filter: `id=eq.${session.roomId}` }, () => loadData(session))
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [session, loadData])
 
-    const activeSession = session;
-
-    async function loadOrders() {
-      let statusFilter: string[] = [];
-
-      if (activeSession.role === "Montaje 1") {
-        statusFilter = ["pendiente", "montaje1"];
-      } else if (activeSession.role === "Montaje 2") {
-        statusFilter = ["montaje1_terminado", "montaje2"];
-      } else if (activeSession.role === "Calidad") {
-        statusFilter = ["montaje2_terminado"];
-      } else if (activeSession.role === "Despacho") {
-        statusFilter = ["listo_para_entrega"];
-      } else {
-        statusFilter = [
-          "pendiente",
-          "montaje1",
-          "montaje1_terminado",
-          "montaje2",
-          "montaje2_terminado",
-          "listo_para_entrega",
-          "error",
-          "entregado",
-        ];
-      }
-
-      const { data, error } = await supabase
-        .from("orders")
-        .select("*")
-        .eq("room_code", activeSession.roomCode)
-        .eq("team", activeSession.team)
-        .eq("round", activeSession.round)
-        .in("status", statusFilter)
-        .order("created_at", { ascending: true });
-
-      if (error) {
-        setMessage(error.message);
-        return;
-      }
-
-      setMessage("");
-      setOrders((data || []) as Order[]);
-    }
-
-    loadOrders();
-
-    const channel = supabase
-      .channel(`orders-play-${activeSession.roomCode}-${activeSession.team}-${activeSession.round}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "orders",
-          filter: `room_code=eq.${activeSession.roomCode}`,
-        },
-        () => loadOrders()
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [session]);
-
-  const visibleOrders = useMemo(() => orders, [orders]);
-
-  async function createOrder(product: Product) {
-    if (!session) return;
-
-    const { error } = await supabase.from("orders").insert({
-      room_code: session.roomCode,
-      team: session.team,
-      round: session.round,
-      product,
-      status: "pendiente",
-      requested_by: session.name,
-      current_station: "Cliente",
-      error_count: 0,
-    });
-
-    if (error) {
-      setMessage(error.message);
-    } else {
-      setMessage(`Pedido ${product} creado.`);
-    }
+  async function update(id: string, data: Partial<Order>) {
+    setMsg('')
+    const { error } = await supabase.from('orders').update(data).eq('id', id)
+    if (error) setMsg(error.message)
   }
 
-  async function updateOrder(order: Order, nextAction: string) {
-    const now = new Date().toISOString();
-    let updateData: Record<string, unknown> = {};
+  if (!session) return null
 
-    if (nextAction === "start_m1") {
-      updateData = {
-        status: "montaje1",
-        montaje1_start: now,
-        current_station: "Montaje 1",
-      };
-    }
+  const roleLabel = session.role
+  const lineColor = session.line === 'A' ? '#2563eb' : '#16a34a'
 
-    if (nextAction === "finish_m1") {
-      updateData = {
-        status: "montaje1_terminado",
-        montaje1_end: now,
-        current_station: "Montaje 2",
-      };
-    }
+  return (
+    <main style={{ padding: 16, maxWidth: 500, margin: '0 auto' }}>
+      <div className="topbar" style={{ marginBottom: 12 }}>
+        <div>
+          <span className="badge" style={{ background: lineColor, color: 'white' }}>Línea {session.line}</span>
+          <h2 style={{ marginTop: 6, fontSize: 16 }}>{roleLabel}</h2>
+          <p className="small">{session.name} · Sala {session.roomId}</p>
+        </div>
+        <button className="btn-ghost" style={{ fontSize: 13, padding: '8px 14px', minHeight: 0 }}
+          onClick={() => { clearSession(); window.location.href = '/' }}>Salir</button>
+      </div>
 
-    if (nextAction === "start_m2") {
-      updateData = {
-        status: "montaje2",
-        montaje2_start: now,
-        current_station: "Montaje 2",
-      };
-    }
+      {msg && <div className="alert alert-danger">{msg}</div>}
+      {loading && <p className="small">Cargando...</p>}
 
-    if (nextAction === "finish_m2") {
-      updateData = {
-        status: "montaje2_terminado",
-        montaje2_end: now,
-        current_station: "Calidad",
-      };
-    }
+      {!loading && (
+        <>
+          {session.role === 'Jefe de Planificacion Estrategica' &&
+            <PlanificadorPanel orders={orders} session={session} onUpdate={update} setMsg={setMsg} />}
+          {session.role === 'Tecnico de Fabricacion Alpha' &&
+            <Ensamble1Panel orders={orders} onUpdate={update} />}
+          {session.role === 'Tecnico de Fabricacion Beta' &&
+            <Ensamble2Panel orders={orders} onUpdate={update} />}
+          {session.role === 'Ingeniero de Procesos Termicos' &&
+            <HornoPanel orders={orders} batches={batches} session={session} room={room} setMsg={setMsg} />}
+          {session.role === 'Gerente de Logistica y Distribucion' &&
+            <AlmacenPanel orders={orders} onUpdate={update} />}
+          {session.role === 'Coordinador de Materiales' &&
+            <ReciclajePanel orders={orders} />}
+        </>
+      )}
+    </main>
+  )
+}
 
-    if (nextAction === "quality_ok") {
-      updateData = {
-        status: "listo_para_entrega",
-        quality_start: now,
-        quality: "OK",
-        current_station: "Despacho",
-      };
-    }
+function PlanificadorPanel({ orders, session, onUpdate, setMsg }: {
+  orders: Order[], session: PlayerSession,
+  onUpdate: (id: string, d: Partial<Order>) => void, setMsg: (s: string) => void
+}) {
+  const pendientes = orders.filter(o => o.status === 'pendiente')
+  const enPlan = orders.filter(o => o.status === 'en_planificacion')
 
-    if (nextAction === "quality_error") {
-      updateData = {
-        status: "error",
-        quality_start: now,
-        quality: "Error",
-        error_count: (order.error_count || 0) + 1,
-        current_station: "Calidad",
-      };
-    }
-
-    if (nextAction === "delivered") {
-      updateData = {
-        status: "entregado",
-        delivered_at: now,
-        current_station: "Entregado",
-      };
-    }
-
-    const { error } = await supabase
-      .from("orders")
-      .update(updateData)
-      .eq("id", order.id);
-
-    if (error) {
-      setMessage(error.message);
-    } else {
-      setMessage("Pedido actualizado.");
-    }
+  async function sendToEnsamble(o: Order) {
+    await onUpdate(o.id, { status: 'ensamble1', ensamble1_start: new Date().toISOString(), planificacion_start: o.planificacion_start || new Date().toISOString() })
   }
 
-  function logout() {
-    clearSession();
-    window.location.href = "/";
-  }
-
-  if (!session) {
-    return (
-      <main className="container">
-        <section className="card">
-          <h1>Cargando sesión...</h1>
-        </section>
-      </main>
-    );
+  async function takePlanning(o: Order) {
+    await onUpdate(o.id, { status: 'en_planificacion', planificacion_start: new Date().toISOString() })
   }
 
   return (
-    <main className="container">
-      <section className="topbar">
-        <div>
-          <span className="badge">Modo estudiante</span>
-          <h1>{session.role}</h1>
-          <p>
-            Sala {session.roomCode} · Equipo {session.team} · Ronda {session.round}
-          </p>
-        </div>
-
-        <div className="actions">
-          <a className="button light-btn" href="/dashboard">
-            Dashboard
-          </a>
-          <button className="secondary" onClick={logout}>
-            Salir
-          </button>
-        </div>
-      </section>
-
-      {message && <p className="notice">{message}</p>}
-
-      {session.role === "Cliente" && (
-        <section className="card">
-          <h2>Crear pedido del cliente</h2>
-          <p>
-            Presiona el producto que el cliente pide. El pedido aparecerá en la línea.
-          </p>
-
-          <div className="grid-3">
-            {PRODUCTS.map((product) => (
-              <button key={product} onClick={() => createOrder(product)}>
-                Pedir {product}
-              </button>
-            ))}
+    <div className="grid">
+      <div className="card">
+        <h2>Tu plan de producción</h2>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 8 }}>
+          <div>
+            <div className="small mb-8">Programa 8:4:4</div>
+            <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+              {PLAN_844.map((p, i) => <span key={i} style={{ display: 'inline-block', width: 18, height: 18, borderRadius: 4, background: PRODUCT_COLOR[p], title: p }} />)}
+            </div>
           </div>
-        </section>
-      )}
+          <div>
+            <div className="small mb-8">Programa 4:2:2</div>
+            <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+              {PLAN_422.map((p, i) => <span key={i} style={{ display: 'inline-block', width: 18, height: 18, borderRadius: 4, background: PRODUCT_COLOR[p] }} />)}
+            </div>
+          </div>
+        </div>
+      </div>
 
-      {session.role !== "Cliente" && (
-        <section className="card">
-          <h2>Pedidos para tu estación</h2>
-
-          <div className="grid">
-            {visibleOrders.map((order) => (
-              <div key={order.id} className="order-card">
-                <div className="order-title">
-                  <strong>{order.product}</strong>
-                  <span className={`status ${order.status}`}>
-                    {statusLabel(order.status)}
-                  </span>
+      {pendientes.length > 0 && (
+        <div className="card">
+          <h3>Pedidos pendientes ({pendientes.length})</h3>
+          <div className="grid mt-8">
+            {pendientes.slice(0, 5).map(o => (
+              <div key={o.id} className="order-card">
+                <div className="order-row">
+                  <div>#{o.sequence_number} {productPill(o.product)}</div>
                 </div>
-
-                <p className="small">
-                  Pedido {order.id.slice(0, 6)} · Tiempo {getOrderCycleLabel(order)}
-                </p>
-
-                <div className="actions">
-                  {session.role === "Montaje 1" && order.status === "pendiente" && (
-                    <button onClick={() => updateOrder(order, "start_m1")}>
-                      Tomar pedido
-                    </button>
-                  )}
-
-                  {session.role === "Montaje 1" && order.status === "montaje1" && (
-                    <button onClick={() => updateOrder(order, "finish_m1")}>
-                      Terminé Montaje 1
-                    </button>
-                  )}
-
-                  {session.role === "Montaje 2" &&
-                    order.status === "montaje1_terminado" && (
-                      <button onClick={() => updateOrder(order, "start_m2")}>
-                        Iniciar Montaje 2
-                      </button>
-                    )}
-
-                  {session.role === "Montaje 2" && order.status === "montaje2" && (
-                    <button onClick={() => updateOrder(order, "finish_m2")}>
-                      Terminé Montaje 2
-                    </button>
-                  )}
-
-                  {session.role === "Calidad" &&
-                    order.status === "montaje2_terminado" && (
-                      <>
-                        <button onClick={() => updateOrder(order, "quality_ok")}>
-                          OK
-                        </button>
-                        <button
-                          className="danger"
-                          onClick={() => updateOrder(order, "quality_error")}
-                        >
-                          Error
-                        </button>
-                      </>
-                    )}
-
-                  {session.role === "Despacho" &&
-                    order.status === "listo_para_entrega" && (
-                      <button onClick={() => updateOrder(order, "delivered")}>
-                        Entregado al cliente
-                      </button>
-                    )}
-                </div>
+                <button className="btn-full" style={{ minHeight: 40, fontSize: 14 }} onClick={() => takePlanning(o)}>
+                  Tomar para planificar
+                </button>
               </div>
             ))}
-
-            {visibleOrders.length === 0 && (
-              <p className="small">Aún no hay pedidos para esta estación.</p>
-            )}
           </div>
-        </section>
+        </div>
       )}
-    </main>
-  );
+
+      {enPlan.length > 0 && (
+        <div className="card">
+          <h3>En tu planificación ({enPlan.length})</h3>
+          <div className="grid mt-8">
+            {enPlan.map(o => (
+              <div key={o.id} className="order-card">
+                <div className="order-row">
+                  <div>#{o.sequence_number} {productPill(o.product)}</div>
+                  <span className="status">{ORDER_STATUS_LABEL[o.status]}</span>
+                </div>
+                <button className="btn-full btn-success" style={{ minHeight: 40, fontSize: 14 }} onClick={() => sendToEnsamble(o)}>
+                  Enviar a Ensamble 1 ▶
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="card">
+        <h3>Estado general</h3>
+        <div className="grid-3 mt-8">
+          <div className="metric"><div className="val">{pendientes.length}</div><div className="lbl">Pendientes</div></div>
+          <div className="metric"><div className="val">{orders.filter(o => ['ensamble1','ensamble1_listo','ensamble2','ensamble2_listo'].includes(o.status)).length}</div><div className="lbl">En ensamble</div></div>
+          <div className="metric good"><div className="val">{orders.filter(o => ['entregado_ok','entregado_tarde'].includes(o.status)).length}</div><div className="lbl">Entregados</div></div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function Ensamble1Panel({ orders, onUpdate }: { orders: Order[], onUpdate: (id: string, d: Partial<Order>) => void }) {
+  const disponibles = orders.filter(o => o.status === 'en_planificacion' || o.status === 'ensamble1')
+  return (
+    <div className="grid">
+      <div className="alert alert-info">Arma la <strong>primera parte</strong> del producto con LEGO y registra aquí.</div>
+      {disponibles.length === 0 && <div className="card text-center"><p>Esperando pedidos del Planificador...</p></div>}
+      {disponibles.map(o => (
+        <div key={o.id} className={`order-card ${o.status === 'ensamble1' ? 'urgent' : ''}`}>
+          <div className="order-row">
+            <div style={{ fontSize: 16, fontWeight: 700 }}>#{o.sequence_number} {productPill(o.product)}</div>
+            <span className="status">{ORDER_STATUS_LABEL[o.status]}</span>
+          </div>
+          {o.status === 'en_planificacion' && (
+            <button className="btn-full" onClick={() => onUpdate(o.id, { status: 'ensamble1', ensamble1_start: new Date().toISOString() })}>
+              ▶ Iniciar armado
+            </button>
+          )}
+          {o.status === 'ensamble1' && (
+            <button className="btn-full btn-success" onClick={() => onUpdate(o.id, { status: 'ensamble1_listo', ensamble1_end: new Date().toISOString() })}>
+              ✓ Listo — Enviar a Ensamble 2
+            </button>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function Ensamble2Panel({ orders, onUpdate }: { orders: Order[], onUpdate: (id: string, d: Partial<Order>) => void }) {
+  const disponibles = orders.filter(o => o.status === 'ensamble1_listo' || o.status === 'ensamble2')
+  return (
+    <div className="grid">
+      <div className="alert alert-info">Recibe de Ensamble 1 y completa la <strong>segunda parte</strong> del armado.</div>
+      {disponibles.length === 0 && <div className="card text-center"><p>Esperando productos de Ensamble 1...</p></div>}
+      {disponibles.map(o => (
+        <div key={o.id} className={`order-card ${o.status === 'ensamble2' ? 'urgent' : ''}`}>
+          <div className="order-row">
+            <div style={{ fontSize: 16, fontWeight: 700 }}>#{o.sequence_number} {productPill(o.product)}</div>
+            <span className="status">{ORDER_STATUS_LABEL[o.status]}</span>
+          </div>
+          {o.status === 'ensamble1_listo' && (
+            <button className="btn-full" onClick={() => onUpdate(o.id, { status: 'ensamble2', ensamble2_start: new Date().toISOString() })}>
+              ▶ Iniciar segunda parte
+            </button>
+          )}
+          {o.status === 'ensamble2' && (
+            <button className="btn-full btn-success" onClick={() => onUpdate(o.id, { status: 'ensamble2_listo', ensamble2_end: new Date().toISOString() })}>
+              ✓ Listo — Enviar al Horno
+            </button>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function HornoPanel({ orders, batches, session, room, setMsg }: {
+  orders: Order[], batches: OvenBatch[], session: PlayerSession, room: Room | null, setMsg: (s: string) => void
+}) {
+  const [ovenTime, setOvenTime] = useState<Record<string, number>>({})
+  const batchSize = session.line === 'A' ? (room?.oven_a_batch || 8) : (room?.oven_b_batch || 4)
+  const ovenDuration = room?.oven_duration_sec || 80
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const processing = batches.filter(b => b.status === 'procesando')
+      const newTimes: Record<string, number> = {}
+      processing.forEach(b => {
+        if (b.started_at) {
+          const elapsed = (Date.now() - new Date(b.started_at).getTime()) / 1000
+          newTimes[b.id] = Math.max(0, ovenDuration - elapsed)
+        }
+      })
+      setOvenTime(newTimes)
+    }, 500)
+    return () => clearInterval(interval)
+  }, [batches, ovenDuration])
+
+  const readyOrders = orders.filter(o => o.status === 'ensamble2_listo' || o.status === 'esperando_horno')
+  const activeBatch = batches.find(b => b.status === 'cargando' || b.status === 'procesando')
+  const readyBatches = batches.filter(b => b.status === 'listo')
+
+  async function startOven() {
+    if (readyOrders.length < batchSize) { setMsg(`Necesitas ${batchSize} productos para iniciar el horno`); return }
+    const batchNum = (batches.length > 0 ? Math.max(...batches.map(b => b.batch_number)) : 0) + 1
+    const now = new Date().toISOString()
+    const ready = new Date(Date.now() + ovenDuration * 1000).toISOString()
+    const { data: batch, error } = await supabase.from('oven_batches').insert({
+      room_id: session.roomId, line: session.line,
+      batch_number: batchNum, status: 'procesando',
+      started_at: now, ready_at: ready,
+    }).select().single()
+    if (error) { setMsg(error.message); return }
+    const toProcess = readyOrders.slice(0, batchSize)
+    await Promise.all(toProcess.map(o => supabase.from('orders').update({ status: 'en_horno', horno_entry: now }).eq('id', o.id)))
+    setTimeout(async () => {
+      await supabase.from('oven_batches').update({ status: 'listo' }).eq('id', batch.id)
+      await Promise.all(toProcess.map(o => supabase.from('orders').update({ status: 'en_horno', horno_exit: new Date().toISOString() }).eq('id', o.id)))
+    }, ovenDuration * 1000)
+  }
+
+  async function releaseBatch(batch: OvenBatch) {
+    const now = new Date().toISOString()
+    await supabase.from('oven_batches').update({ status: 'liberado', released_at: now }).eq('id', batch.id)
+    const inOven = orders.filter(o => o.status === 'en_horno' && o.horno_exit)
+    await Promise.all(inOven.map(o => supabase.from('orders').update({ status: 'en_almacen', almacen_entry: now }).eq('id', o.id)))
+  }
+
+  return (
+    <div className="grid">
+      <div className={`oven-box ${activeBatch?.status === 'procesando' ? 'processing' : readyBatches.length > 0 ? 'ready' : ''}`}>
+        <div className="flex-between">
+          <div>
+            <h3>🔥 Horno {session.line}</h3>
+            <p className="small">Lote mínimo: {batchSize} · {ovenDuration} segundos</p>
+          </div>
+          {activeBatch?.status === 'procesando' && ovenTime[activeBatch.id] !== undefined ? (
+            <div>
+              <div className="oven-timer red">{String(Math.floor(ovenTime[activeBatch.id] / 60)).padStart(2,'0')}:{String(Math.round(ovenTime[activeBatch.id]) % 60).padStart(2,'0')}</div>
+              <div className="progress" style={{ width: 100 }}>
+                <div className="progress-fill" style={{ width: `${((ovenDuration - ovenTime[activeBatch.id]) / ovenDuration) * 100}%` }} />
+              </div>
+            </div>
+          ) : readyBatches.length > 0 ? (
+            <div className="oven-timer green">¡Listo!</div>
+          ) : (
+            <div className="oven-timer" style={{ color: 'var(--muted)', fontSize: 20 }}>Vacío</div>
+          )}
+        </div>
+
+        <div className="lote-dots">
+          {Array.from({ length: batchSize }).map((_, i) => (
+            <div key={i} className={`lote-dot ${i < readyOrders.length ? (readyBatches.length > 0 ? 'done' : 'filled') : ''}`} />
+          ))}
+        </div>
+        <p className="small mt-8">{readyOrders.length} / {batchSize} productos listos para entrar</p>
+      </div>
+
+      {readyBatches.length > 0 && readyBatches.map(b => (
+        <button key={b.id} className="btn-full btn-success btn-xl" onClick={() => releaseBatch(b)}>
+          🏭 Liberar lote #{b.batch_number} al Almacén
+        </button>
+      ))}
+
+      {!activeBatch && readyBatches.length === 0 && readyOrders.length >= batchSize && (
+        <button className="btn-full btn-xl" onClick={startOven}>
+          🔥 Iniciar Horno — {batchSize} productos
+        </button>
+      )}
+
+      {activeBatch?.status === 'procesando' && (
+        <div className="alert alert-warn">El horno está procesando. Espera que termine para liberar el lote.</div>
+      )}
+
+      <div className="card">
+        <h3>En espera del horno ({readyOrders.length})</h3>
+        <div className="flex" style={{ gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
+          {readyOrders.map(o => <span key={o.id}>{productPill(o.product)}</span>)}
+          {readyOrders.length === 0 && <p className="small">Nada en espera</p>}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function AlmacenPanel({ orders, onUpdate }: { orders: Order[], onUpdate: (id: string, d: Partial<Order>) => void }) {
+  const enAlmacen = orders.filter(o => o.status === 'en_almacen')
+  return (
+    <div className="grid">
+      <div className="alert alert-info">Cuando el cliente pida un producto, entregáselo físicamente y regístralo aquí.</div>
+      {enAlmacen.length === 0 && <div className="card text-center"><p>No hay productos en almacén aún.</p></div>}
+      {enAlmacen.map(o => (
+        <div key={o.id} className="order-card">
+          <div className="order-row">
+            <div style={{ fontSize: 16, fontWeight: 700 }}>#{o.sequence_number} {productPill(o.product)}</div>
+          </div>
+          <div className="grid-2" style={{ gap: 8 }}>
+            <button className="btn-success" style={{ fontSize: 14, minHeight: 44 }}
+              onClick={() => onUpdate(o.id, { status: 'entregado_ok', delivered_at: new Date().toISOString() })}>
+              ✓ Entregado a tiempo
+            </button>
+            <button className="btn-warning" style={{ fontSize: 14, minHeight: 44 }}
+              onClick={() => onUpdate(o.id, { status: 'entregado_tarde', delivered_at: new Date().toISOString() })}>
+              ⚠ Entregado tarde
+            </button>
+          </div>
+          <button className="btn-full btn-danger" style={{ fontSize: 13, minHeight: 38 }}
+            onClick={() => onUpdate(o.id, { status: 'no_entregado', delivered_at: new Date().toISOString() })}>
+            ✗ No entregado
+          </button>
+        </div>
+      ))}
+      <div className="card">
+        <div className="grid-3">
+          <div className="metric good"><div className="val">{orders.filter(o=>o.status==='entregado_ok').length}</div><div className="lbl">A tiempo</div></div>
+          <div className="metric warn"><div className="val">{orders.filter(o=>o.status==='entregado_tarde').length}</div><div className="lbl">Tarde</div></div>
+          <div className="metric bad"><div className="val">{orders.filter(o=>o.status==='no_entregado').length}</div><div className="lbl">Perdidas</div></div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ReciclajePanel({ orders }: { orders: Order[] }) {
+  const delivered = orders.filter(o => ['entregado_ok','entregado_tarde','no_entregado'].includes(o.status))
+  return (
+    <div className="grid">
+      <div className="alert alert-info">Recoge los productos entregados, desármalos y devuelve las piezas al área de materiales.</div>
+      <div className="card">
+        <h3>Productos para reciclar ({delivered.length})</h3>
+        <div className="flex" style={{ gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
+          {delivered.map(o => <span key={o.id}>{productPill(o.product)}</span>)}
+        </div>
+        {delivered.length === 0 && <p className="small mt-8">Aún no hay productos para reciclar.</p>}
+      </div>
+      <div className="card">
+        <p className="small">Tu rol es clave: sin piezas recicladas, la línea se queda sin materiales.</p>
+      </div>
+    </div>
+  )
 }
