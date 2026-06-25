@@ -56,7 +56,6 @@ export default function PlayPage() {
 
   if (!session) return null
 
-  const roleLabel = session.role
   const lineColor = session.line === 'A' ? '#2563eb' : '#16a34a'
 
   return (
@@ -64,7 +63,7 @@ export default function PlayPage() {
       <div className="topbar" style={{ marginBottom: 12 }}>
         <div>
           <span className="badge" style={{ background: lineColor, color: 'white' }}>Línea {session.line}</span>
-          <h2 style={{ marginTop: 6, fontSize: 16 }}>{roleLabel}</h2>
+          <h2 style={{ marginTop: 6, fontSize: 16 }}>{session.role}</h2>
           <p className="small">{session.name} · Sala {session.roomId}</p>
         </div>
         <button className="btn-ghost" style={{ fontSize: 13, padding: '8px 14px', minHeight: 0 }}
@@ -109,6 +108,9 @@ function PlanificadorPanel({ orders, session, onUpdate, setMsg }: {
     await onUpdate(o.id, { status: 'en_planificacion', planificacion_start: new Date().toISOString() })
   }
 
+  void session
+  void setMsg
+
   return (
     <div className="grid">
       <div className="card">
@@ -117,13 +119,25 @@ function PlanificadorPanel({ orders, session, onUpdate, setMsg }: {
           <div>
             <div className="small mb-8">Programa 8:4:4</div>
             <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
-              {PLAN_844.map((p, i) => <span key={i} style={{ display: 'inline-block', width: 18, height: 18, borderRadius: 4, background: PRODUCT_COLOR[p], title: p }} />)}
+              {PLAN_844.map((p, i) => (
+                <span
+                  key={i}
+                  title={p}
+                  style={{ display: 'inline-block', width: 18, height: 18, borderRadius: 4, background: PRODUCT_COLOR[p] }}
+                />
+              ))}
             </div>
           </div>
           <div>
             <div className="small mb-8">Programa 4:2:2</div>
             <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
-              {PLAN_422.map((p, i) => <span key={i} style={{ display: 'inline-block', width: 18, height: 18, borderRadius: 4, background: PRODUCT_COLOR[p] }} />)}
+              {PLAN_422.map((p, i) => (
+                <span
+                  key={i}
+                  title={p}
+                  style={{ display: 'inline-block', width: 18, height: 18, borderRadius: 4, background: PRODUCT_COLOR[p] }}
+                />
+              ))}
             </div>
           </div>
         </div>
@@ -279,9 +293,9 @@ function HornoPanel({ orders, batches, session, room, setMsg }: {
     }, ovenDuration * 1000)
   }
 
-  async function releaseBatch(batch: OvenBatch) {
+  async function releaseBatch(b: OvenBatch) {
     const now = new Date().toISOString()
-    await supabase.from('oven_batches').update({ status: 'liberado', released_at: now }).eq('id', batch.id)
+    await supabase.from('oven_batches').update({ status: 'liberado', released_at: now }).eq('id', b.id)
     const inOven = orders.filter(o => o.status === 'en_horno' && o.horno_exit)
     await Promise.all(inOven.map(o => supabase.from('orders').update({ status: 'en_almacen', almacen_entry: now }).eq('id', o.id)))
   }
