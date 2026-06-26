@@ -39,52 +39,114 @@ export default function ClientePage() {
 
   useEffect(() => {
     if (!session) return
-    loadOrders(session)
-    const ch = supabase.channel('cliente-' + session.roomId + session.line)
+
+    let active = true
+    const refresh = () => {
+      if (active) loadOrders(session)
+    }
+
+    refresh()
+
+    // Realtime + respaldo: si Supabase tarda en avisar, igual refresca cada 1 s.
+    const polling = setInterval(refresh, 1000)
+
+    const ch = supabase.channel('cliente-' + session.roomId + '-' + session.line)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'orders',
-        filter: `room_id=eq.${session.roomId}` }, () => loadOrders(session))
+        filter: `room_id=eq.${session.roomId}` }, refresh)
       .subscribe()
-    return () => { supabase.removeChannel(ch) }
+
+    return () => {
+      active = false
+      clearInterval(polling)
+      supabase.removeChannel(ch)
+    }
   }, [session, loadOrders])
 
   // Línea A → T1, Línea B → T2 automático
   const seq = session?.line === 'B' ? DEMAND_SEQUENCE_T2 : DEMAND_SEQUENCE_T1
 
+  async function saveNpsScore(s: PlayerSession, score: 0 | 1 | 2) {
+    await supabase.from('nps_responses').insert({
+      room_id: s.roomId,
+      line:    s.line,
+      score,
+    })
+  }
+
+  async function autoMarkUnansweredBefore(s: PlayerSession, nextSequenceNumber: number) {
+    const now = new Date().toISOString()
+
+    // Busca todos los pedidos anteriores que el cliente aún no calificó.
+    // Cuando inicia el siguiente pedido, esos pedidos pasan automáticamente a "No recibí".
+    const { data: unanswered, error: selectError } = await supabase
+      .from('orders')
+      .select('id')
+      .eq('room_id', s.roomId)
+      .eq('line', s.line)
+      .lt('sequence_number', nextSequenceNumber)
+      .is('client_verdict', null)
+
+    if (selectError || !unanswered || unanswered.length === 0) return
+
+    const ids = unanswered.map(o => o.id)
+
+    await supabase
+      .from('orders')
+      .update({
+        client_verdict: 'no_entregado',
+        status:         'no_entregado',
+        delivered_at:   now,
+      })
+      .in('id', ids)
+
+    // Cada pedido no recibido cuenta como satisfacción 0.
+    await supabase.from('nps_responses').insert(
+      ids.map(() => ({ room_id: s.roomId, line: s.line, score: 0 }))
+    )
+  }
+
   async function createOrder(s: PlayerSession, idx: number) {
     if (idx >= seq.length) return
-    // Marcar pedido anterior como perdido si no fue calificado
-    if (idx > 0) {
-      const { data: prev } = await supabase
-        .from('orders').select('*')
-        .eq('room_id', s.roomId).eq('line', s.line)
-        .eq('sequence_number', idx).maybeSingle()
-      if (prev && !prev.client_verdict) {
-        await supabase.from('orders').update({
-          client_verdict: 'no_entregado',
-          status: 'no_entregado',
-          delivered_at: new Date().toISOString(),
-        }).eq('id', prev.id)
-      }
-    }
+
+    const nextSequenceNumber = idx + 1
+
+    // Antes de crear el nuevo pedido, cierra automáticamente los pedidos anteriores sin respuesta.
+    await autoMarkUnansweredBefore(s, nextSequenceNumber)
+
     await supabase.from('orders').insert({
       room_id:         s.roomId,
       line:            s.line,
-      sequence_number: idx + 1,
+      sequence_number: nextSequenceNumber,
       product:         seq[idx],
       status:          'pendiente',
       requested_at:    new Date().toISOString(),
     })
+
+    await loadOrders(s)
   }
 
-  function startDemand() {
+  async function finishDemand() {
+    const s = sessionRef.current
+
+    if (s) {
+      // Al cerrar la secuencia, también marca como no recibidos los pedidos que quedaron sin respuesta.
+      await autoMarkUnansweredBefore(s, seq.length + 1)
+      await loadOrders(s)
+    }
+
+    stopDemand()
+  }
+
+  async function startDemand() {
     const s = sessionRef.current
     if (!s) return
+
     setRunning(true)
     setNextIn(intervalSec)
     idxRef.current = currentIdx
 
     // Primer pedido inmediato
-    createOrder(s, idxRef.current)
+    await createOrder(s, idxRef.current)
     idxRef.current++
     setCurrentIdx(idxRef.current)
 
@@ -92,10 +154,19 @@ export default function ClientePage() {
       setNextIn(prev => prev <= 1 ? intervalSec : prev - 1)
     }, 1000)
 
-    timerRef.current = setInterval(() => {
+    timerRef.current = setInterval(async () => {
+      const sNow = sessionRef.current
+      if (!sNow) return
+
       const cur = idxRef.current
-      if (cur >= seq.length) { stopDemand(); return }
-      createOrder(s, cur)
+
+      if (cur >= seq.length) {
+        await finishDemand()
+        return
+      }
+
+      // Cuando inicia este nuevo pedido, los anteriores sin respuesta se marcan como "No recibí".
+      await createOrder(sNow, cur)
       idxRef.current++
       setCurrentIdx(idxRef.current)
       setNextIn(intervalSec)
@@ -125,11 +196,7 @@ export default function ClientePage() {
     }).eq('id', order.id)
     // Guardar NPS automático
     if (session) {
-      await supabase.from('nps_responses').insert({
-        room_id: session.roomId,
-        line:    session.line,
-        score:   nps,
-      })
+      await saveNpsScore(session, nps)
     }
   }
 
