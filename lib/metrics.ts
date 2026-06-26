@@ -54,7 +54,7 @@ export function calcMetrics(orders: Order[], batches: OvenBatch[] = []) {
     : 0
 
   // NPS automático: 0=perdido, 1=tarde, 2=a tiempo
-  const npsValues = orders
+  const npsValues: number[] = orders
     .filter(o => o.client_verdict)
     .map(o => o.client_verdict === 'ok' ? 2 : o.client_verdict === 'tarde' ? 1 : 0)
   const npsAvg = npsValues.length
