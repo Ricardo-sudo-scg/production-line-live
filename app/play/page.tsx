@@ -3,9 +3,12 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 import { getSession, clearSession } from '../../lib/session'
-import { ORDER_STATUS_LABEL, PLAN_422, PLAN_844, PRODUCT_COLOR, type Order, type OvenBatch, type PlayerSession, type Room } from '../../lib/types'
+import {
+  ORDER_STATUS_LABEL, PLAN_422, PLAN_844, PRODUCT_COLOR, PRODUCT_LABEL,
+  type Order, type OvenBatch, type PlayerSession, type Product, type Room,
+} from '../../lib/types'
 
-function productPill(p: string) {
+function ProductPill({ p }: { p: string }) {
   const map: Record<string, string> = { Bicolor: 'pill-bc', Amarillo: 'pill-am', Rojo: 'pill-r' }
   const short: Record<string, string> = { Bicolor: 'Bc', Amarillo: 'Am', Rojo: 'R' }
   return <span className={map[p] || ''}>{short[p] || p}</span>
@@ -13,10 +16,10 @@ function productPill(p: string) {
 
 export default function PlayPage() {
   const [session, setSession] = useState<PlayerSession | null>(null)
-  const [orders, setOrders] = useState<Order[]>([])
+  const [orders, setOrders]   = useState<Order[]>([])
   const [batches, setBatches] = useState<OvenBatch[]>([])
-  const [room, setRoom] = useState<Room | null>(null)
-  const [msg, setMsg] = useState('')
+  const [room, setRoom]       = useState<Room | null>(null)
+  const [msg, setMsg]         = useState('')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -41,9 +44,12 @@ export default function PlayPage() {
     if (!session) return
     loadData(session)
     const ch = supabase.channel('play-' + session.roomId + session.line)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `room_id=eq.${session.roomId}` }, () => loadData(session))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'oven_batches', filter: `room_id=eq.${session.roomId}` }, () => loadData(session))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms', filter: `id=eq.${session.roomId}` }, () => loadData(session))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders',
+        filter: `room_id=eq.${session.roomId}` }, () => loadData(session))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'oven_batches',
+        filter: `room_id=eq.${session.roomId}` }, () => loadData(session))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms',
+        filter: `id=eq.${session.roomId}` }, () => loadData(session))
       .subscribe()
     return () => { supabase.removeChannel(ch) }
   }, [session, loadData])
@@ -63,10 +69,10 @@ export default function PlayPage() {
       <div className="topbar" style={{ marginBottom: 12 }}>
         <div>
           <span className="badge" style={{ background: lineColor, color: 'white' }}>Línea {session.line}</span>
-          <h2 style={{ marginTop: 6, fontSize: 16 }}>{session.role}</h2>
+          <h2 style={{ marginTop: 6, fontSize: 15 }}>{session.role}</h2>
           <p className="small">{session.name} · Sala {session.roomId}</p>
         </div>
-        <button className="btn-ghost" style={{ fontSize: 13, padding: '8px 14px', minHeight: 0 }}
+        <button className="btn-ghost" style={{ fontSize: 12, padding: '7px 12px', minHeight: 0 }}
           onClick={() => { clearSession(); window.location.href = '/' }}>Salir</button>
       </div>
 
@@ -75,15 +81,15 @@ export default function PlayPage() {
 
       {!loading && (
         <>
-          {session.role === 'Jefe de Planificacion Estrategica' &&
-            <PlanificadorPanel orders={orders} session={session} onUpdate={update} setMsg={setMsg} />}
-          {session.role === 'Tecnico de Fabricacion Alpha' &&
+          {session.role === 'Jefe de Planificación Estratégica' &&
+            <PlanificadorPanel orders={orders} session={session} onUpdate={update} />}
+          {session.role === 'Técnico de Fabricación Alpha' &&
             <Ensamble1Panel orders={orders} onUpdate={update} />}
-          {session.role === 'Tecnico de Fabricacion Beta' &&
+          {session.role === 'Técnico de Fabricación Beta' &&
             <Ensamble2Panel orders={orders} onUpdate={update} />}
-          {session.role === 'Ingeniero de Procesos Termicos' &&
+          {session.role === 'Ingeniero de Procesos Térmicos' &&
             <HornoPanel orders={orders} batches={batches} session={session} room={room} setMsg={setMsg} />}
-          {session.role === 'Gerente de Logistica y Distribucion' &&
+          {session.role === 'Gerente de Logística y Distribución' &&
             <AlmacenPanel orders={orders} onUpdate={update} />}
           {session.role === 'Coordinador de Materiales' &&
             <ReciclajePanel orders={orders} />}
@@ -93,124 +99,125 @@ export default function PlayPage() {
   )
 }
 
-function PlanificadorPanel({ orders, session, onUpdate, setMsg }: {
+// ─── PLANIFICADOR ────────────────────────────────────────────────────────────
+function PlanificadorPanel({ orders, session, onUpdate }: {
   orders: Order[], session: PlayerSession,
-  onUpdate: (id: string, d: Partial<Order>) => void, setMsg: (s: string) => void
+  onUpdate: (id: string, d: Partial<Order>) => void,
 }) {
-  const pendientes = orders.filter(o => o.status === 'pendiente')
-  const enPlan = orders.filter(o => o.status === 'en_planificacion')
+  const plan      = session.line === 'A' ? PLAN_844 : PLAN_422
+  const batchSize = session.line === 'A' ? 8 : 4
+  const planName  = session.line === 'A' ? '8:4:4' : '4:2:2'
 
-  async function sendToEnsamble(o: Order) {
-    await onUpdate(o.id, { status: 'ensamble1', ensamble1_start: new Date().toISOString(), planificacion_start: o.planificacion_start || new Date().toISOString() })
+  // Cuántos productos ya fueron ordenados a producir
+  const ordered = orders.filter(o => o.status !== 'pendiente').length
+  // Calcular qué lote va (cuántos lotes completos ya se ordenaron)
+  const lotesOrdenados = Math.floor(ordered / batchSize)
+
+  async function ordenarLote() {
+    // Crear los productos del siguiente lote como pedidos de producción
+    const startIdx   = lotesOrdenados * batchSize
+    const loteActual = plan.slice(startIdx % plan.length, (startIdx % plan.length) + batchSize)
+    const now        = new Date().toISOString()
+    await Promise.all(
+      loteActual.map((product, i) =>
+        supabase.from('orders').insert({
+          room_id:          session.roomId,
+          line:             session.line,
+          sequence_number:  startIdx + i + 1,
+          product,
+          status:           'en_planificacion',
+          requested_at:     now,
+          planificacion_start: now,
+        })
+      )
+    )
   }
 
-  async function takePlanning(o: Order) {
-    await onUpdate(o.id, { status: 'en_planificacion', planificacion_start: new Date().toISOString() })
-  }
-
-  void session
-  void setMsg
+  const pendientes  = orders.filter(o => o.status === 'pendiente')
+  const enProceso   = orders.filter(o => !['pendiente','entregado_ok','entregado_tarde','no_entregado'].includes(o.status))
+  const entregados  = orders.filter(o => ['entregado_ok','entregado_tarde'].includes(o.status))
 
   return (
     <div className="grid">
       <div className="card">
-        <h2>Tu plan de producción</h2>
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 8 }}>
-          <div>
-            <div className="small mb-8">Programa 8:4:4</div>
-            <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
-              {PLAN_844.map((p, i) => (
-                <span
-                  key={i}
-                  title={p}
-                  style={{ display: 'inline-block', width: 18, height: 18, borderRadius: 4, background: PRODUCT_COLOR[p] }}
-                />
-              ))}
-            </div>
+        <h2>Plan de producción — {planName}</h2>
+        <p className="small" style={{ marginTop: 4 }}>
+          Lote de {batchSize} · se repite indefinidamente
+        </p>
+        <div style={{ marginTop: 10 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#334155', marginBottom: 4 }}>Patrón del lote:</div>
+          <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+            {plan.map((p, i) => (
+              <div key={i} title={p} style={{
+                width: 20, height: 20, borderRadius: 4,
+                background: i < ordered % plan.length ? PRODUCT_COLOR[p as Product] : PRODUCT_COLOR[p as Product] + '44',
+                border: `2px solid ${PRODUCT_COLOR[p as Product]}`,
+                position: 'relative',
+              }}>
+                {i < ordered % plan.length && (
+                  <span style={{ position: 'absolute', top: -2, left: 2, fontSize: 10, color: 'white', fontWeight: 800 }}>✓</span>
+                )}
+              </div>
+            ))}
           </div>
-          <div>
-            <div className="small mb-8">Programa 4:2:2</div>
-            <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
-              {PLAN_422.map((p, i) => (
-                <span
-                  key={i}
-                  title={p}
-                  style={{ display: 'inline-block', width: 18, height: 18, borderRadius: 4, background: PRODUCT_COLOR[p] }}
-                />
-              ))}
-            </div>
-          </div>
+          <p className="small mt-8">
+            Lotes ordenados: <strong>{lotesOrdenados}</strong> · Productos en línea: <strong>{enProceso.length}</strong>
+          </p>
         </div>
+      </div>
+
+      <button className="btn-full btn-xl" style={{ background: '#2563eb' }} onClick={ordenarLote}>
+        📋 Ordenar lote {lotesOrdenados + 1} ({batchSize} productos)
+      </button>
+
+      <div className="grid-3">
+        <div className="metric"><div className="val">{enProceso.length}</div><div className="lbl">En línea</div></div>
+        <div className="metric good"><div className="val">{entregados.length}</div><div className="lbl">Entregados</div></div>
+        <div className="metric bad"><div className="val">{orders.filter(o => o.status === 'no_entregado').length}</div><div className="lbl">Perdidos</div></div>
       </div>
 
       {pendientes.length > 0 && (
         <div className="card">
-          <h3>Pedidos pendientes ({pendientes.length})</h3>
-          <div className="grid mt-8">
-            {pendientes.slice(0, 5).map(o => (
-              <div key={o.id} className="order-card">
-                <div className="order-row">
-                  <div>#{o.sequence_number} {productPill(o.product)}</div>
-                </div>
-                <button className="btn-full" style={{ minHeight: 40, fontSize: 14 }} onClick={() => takePlanning(o)}>
-                  Tomar para planificar
-                </button>
-              </div>
-            ))}
+          <h3>Pendientes del cliente ({pendientes.length})</h3>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
+            {pendientes.map(o => <ProductPill key={o.id} p={o.product} />)}
           </div>
         </div>
       )}
-
-      {enPlan.length > 0 && (
-        <div className="card">
-          <h3>En tu planificación ({enPlan.length})</h3>
-          <div className="grid mt-8">
-            {enPlan.map(o => (
-              <div key={o.id} className="order-card">
-                <div className="order-row">
-                  <div>#{o.sequence_number} {productPill(o.product)}</div>
-                  <span className="status">{ORDER_STATUS_LABEL[o.status]}</span>
-                </div>
-                <button className="btn-full btn-success" style={{ minHeight: 40, fontSize: 14 }} onClick={() => sendToEnsamble(o)}>
-                  Enviar a Ensamble 1 ▶
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div className="card">
-        <h3>Estado general</h3>
-        <div className="grid-3 mt-8">
-          <div className="metric"><div className="val">{pendientes.length}</div><div className="lbl">Pendientes</div></div>
-          <div className="metric"><div className="val">{orders.filter(o => ['ensamble1','ensamble1_listo','ensamble2','ensamble2_listo'].includes(o.status)).length}</div><div className="lbl">En ensamble</div></div>
-          <div className="metric good"><div className="val">{orders.filter(o => ['entregado_ok','entregado_tarde'].includes(o.status)).length}</div><div className="lbl">Entregados</div></div>
-        </div>
-      </div>
     </div>
   )
 }
 
-function Ensamble1Panel({ orders, onUpdate }: { orders: Order[], onUpdate: (id: string, d: Partial<Order>) => void }) {
+// ─── ENSAMBLE 1 ──────────────────────────────────────────────────────────────
+function Ensamble1Panel({ orders, onUpdate }: {
+  orders: Order[], onUpdate: (id: string, d: Partial<Order>) => void,
+}) {
   const disponibles = orders.filter(o => o.status === 'en_planificacion' || o.status === 'ensamble1')
   return (
     <div className="grid">
-      <div className="alert alert-info">Arma la <strong>primera parte</strong> del producto con LEGO y registra aquí.</div>
-      {disponibles.length === 0 && <div className="card text-center"><p>Esperando pedidos del Planificador...</p></div>}
+      <div className="alert alert-info">
+        Arma la <strong>primera parte</strong> del producto con LEGO y registra aquí.
+      </div>
+      {disponibles.length === 0 && (
+        <div className="card text-center"><p>Esperando pedidos del Planificador...</p></div>
+      )}
       {disponibles.map(o => (
         <div key={o.id} className={`order-card ${o.status === 'ensamble1' ? 'urgent' : ''}`}>
           <div className="order-row">
-            <div style={{ fontSize: 16, fontWeight: 700 }}>#{o.sequence_number} {productPill(o.product)}</div>
+            <div style={{ fontSize: 16, fontWeight: 700 }}>
+              #{o.sequence_number} <ProductPill p={o.product} />
+            </div>
             <span className="status">{ORDER_STATUS_LABEL[o.status]}</span>
           </div>
           {o.status === 'en_planificacion' && (
-            <button className="btn-full" onClick={() => onUpdate(o.id, { status: 'ensamble1', ensamble1_start: new Date().toISOString() })}>
+            <button className="btn-full" onClick={() =>
+              onUpdate(o.id, { status: 'ensamble1', ensamble1_start: new Date().toISOString() })}>
               ▶ Iniciar armado
             </button>
           )}
           {o.status === 'ensamble1' && (
-            <button className="btn-full btn-success" onClick={() => onUpdate(o.id, { status: 'ensamble1_listo', ensamble1_end: new Date().toISOString() })}>
+            <button className="btn-full btn-success" onClick={() =>
+              onUpdate(o.id, { status: 'ensamble1_listo', ensamble1_end: new Date().toISOString() })}>
               ✓ Listo — Enviar a Ensamble 2
             </button>
           )}
@@ -220,25 +227,36 @@ function Ensamble1Panel({ orders, onUpdate }: { orders: Order[], onUpdate: (id: 
   )
 }
 
-function Ensamble2Panel({ orders, onUpdate }: { orders: Order[], onUpdate: (id: string, d: Partial<Order>) => void }) {
+// ─── ENSAMBLE 2 ──────────────────────────────────────────────────────────────
+function Ensamble2Panel({ orders, onUpdate }: {
+  orders: Order[], onUpdate: (id: string, d: Partial<Order>) => void,
+}) {
   const disponibles = orders.filter(o => o.status === 'ensamble1_listo' || o.status === 'ensamble2')
   return (
     <div className="grid">
-      <div className="alert alert-info">Recibe de Ensamble 1 y completa la <strong>segunda parte</strong> del armado.</div>
-      {disponibles.length === 0 && <div className="card text-center"><p>Esperando productos de Ensamble 1...</p></div>}
+      <div className="alert alert-info">
+        Recibe de Ensamble 1 y completa la <strong>segunda parte</strong> del armado.
+      </div>
+      {disponibles.length === 0 && (
+        <div className="card text-center"><p>Esperando productos de Ensamble 1...</p></div>
+      )}
       {disponibles.map(o => (
         <div key={o.id} className={`order-card ${o.status === 'ensamble2' ? 'urgent' : ''}`}>
           <div className="order-row">
-            <div style={{ fontSize: 16, fontWeight: 700 }}>#{o.sequence_number} {productPill(o.product)}</div>
+            <div style={{ fontSize: 16, fontWeight: 700 }}>
+              #{o.sequence_number} <ProductPill p={o.product} />
+            </div>
             <span className="status">{ORDER_STATUS_LABEL[o.status]}</span>
           </div>
           {o.status === 'ensamble1_listo' && (
-            <button className="btn-full" onClick={() => onUpdate(o.id, { status: 'ensamble2', ensamble2_start: new Date().toISOString() })}>
+            <button className="btn-full" onClick={() =>
+              onUpdate(o.id, { status: 'ensamble2', ensamble2_start: new Date().toISOString() })}>
               ▶ Iniciar segunda parte
             </button>
           )}
           {o.status === 'ensamble2' && (
-            <button className="btn-full btn-success" onClick={() => onUpdate(o.id, { status: 'ensamble2_listo', ensamble2_end: new Date().toISOString() })}>
+            <button className="btn-full btn-success" onClick={() =>
+              onUpdate(o.id, { status: 'ensamble2_listo', ensamble2_end: new Date().toISOString() })}>
               ✓ Listo — Enviar al Horno
             </button>
           )}
@@ -248,11 +266,13 @@ function Ensamble2Panel({ orders, onUpdate }: { orders: Order[], onUpdate: (id: 
   )
 }
 
+// ─── HORNO ───────────────────────────────────────────────────────────────────
 function HornoPanel({ orders, batches, session, room, setMsg }: {
-  orders: Order[], batches: OvenBatch[], session: PlayerSession, room: Room | null, setMsg: (s: string) => void
+  orders: Order[], batches: OvenBatch[], session: PlayerSession,
+  room: Room | null, setMsg: (s: string) => void,
 }) {
   const [ovenTime, setOvenTime] = useState<Record<string, number>>({})
-  const batchSize = session.line === 'A' ? (room?.oven_a_batch || 8) : (room?.oven_b_batch || 4)
+  const batchSize   = session.line === 'A' ? (room?.oven_a_batch || 8) : (room?.oven_b_batch || 4)
   const ovenDuration = room?.oven_duration_sec || 80
 
   useEffect(() => {
@@ -270,34 +290,47 @@ function HornoPanel({ orders, batches, session, room, setMsg }: {
     return () => clearInterval(interval)
   }, [batches, ovenDuration])
 
-  const readyOrders = orders.filter(o => o.status === 'ensamble2_listo' || o.status === 'esperando_horno')
-  const activeBatch = batches.find(b => b.status === 'cargando' || b.status === 'procesando')
+  const readyOrders  = orders.filter(o => o.status === 'ensamble2_listo' || o.status === 'esperando_horno')
+  const activeBatch  = batches.find(b => b.status === 'procesando')
   const readyBatches = batches.filter(b => b.status === 'listo')
 
   async function startOven() {
-    if (readyOrders.length < batchSize) { setMsg(`Necesitas ${batchSize} productos para iniciar el horno`); return }
+    if (readyOrders.length < batchSize) {
+      setMsg(`Necesitas ${batchSize} productos para iniciar el horno`)
+      return
+    }
     const batchNum = (batches.length > 0 ? Math.max(...batches.map(b => b.batch_number)) : 0) + 1
-    const now = new Date().toISOString()
-    const ready = new Date(Date.now() + ovenDuration * 1000).toISOString()
-    const { data: batch, error } = await supabase.from('oven_batches').insert({
-      room_id: session.roomId, line: session.line,
-      batch_number: batchNum, status: 'procesando',
-      started_at: now, ready_at: ready,
-    }).select().single()
-    if (error) { setMsg(error.message); return }
-    const toProcess = readyOrders.slice(0, batchSize)
-    await Promise.all(toProcess.map(o => supabase.from('orders').update({ status: 'en_horno', horno_entry: now }).eq('id', o.id)))
-    setTimeout(async () => {
-      await supabase.from('oven_batches').update({ status: 'listo' }).eq('id', batch.id)
-      await Promise.all(toProcess.map(o => supabase.from('orders').update({ status: 'en_horno', horno_exit: new Date().toISOString() }).eq('id', o.id)))
-    }, ovenDuration * 1000)
-  }
+    const now      = new Date().toISOString()
+    const readyAt  = new Date(Date.now() + ovenDuration * 1000).toISOString()
 
-  async function releaseBatch(b: OvenBatch) {
-    const now = new Date().toISOString()
-    await supabase.from('oven_batches').update({ status: 'liberado', released_at: now }).eq('id', b.id)
-    const inOven = orders.filter(o => o.status === 'en_horno' && o.horno_exit)
-    await Promise.all(inOven.map(o => supabase.from('orders').update({ status: 'en_almacen', almacen_entry: now }).eq('id', o.id)))
+    const { data: batch, error } = await supabase.from('oven_batches').insert({
+      room_id:      session.roomId,
+      line:         session.line,
+      batch_number: batchNum,
+      status:       'procesando',
+      started_at:   now,
+      ready_at:     readyAt,
+    }).select().single()
+
+    if (error || !batch) { setMsg(error?.message || 'Error al iniciar horno'); return }
+
+    const toProcess = readyOrders.slice(0, batchSize)
+    await Promise.all(toProcess.map(o =>
+      supabase.from('orders').update({ status: 'en_horno', horno_entry: now }).eq('id', o.id)
+    ))
+
+    // Liberación automática al terminar los 80 segundos
+    setTimeout(async () => {
+      const exitTime = new Date().toISOString()
+      await supabase.from('oven_batches').update({ status: 'liberado', released_at: exitTime }).eq('id', batch.id)
+      await Promise.all(toProcess.map(o =>
+        supabase.from('orders').update({
+          status:       'en_almacen',
+          horno_exit:   exitTime,
+          almacen_entry: exitTime,
+        }).eq('id', o.id)
+      ))
+    }, ovenDuration * 1000)
   }
 
   return (
@@ -306,79 +339,100 @@ function HornoPanel({ orders, batches, session, room, setMsg }: {
         <div className="flex-between">
           <div>
             <h3>🔥 Horno {session.line}</h3>
-            <p className="small">Lote mínimo: {batchSize} · {ovenDuration} segundos</p>
+            <p className="small">Lote: {batchSize} · {ovenDuration} segundos · libera automático</p>
           </div>
           {activeBatch?.status === 'procesando' && ovenTime[activeBatch.id] !== undefined ? (
             <div>
-              <div className="oven-timer red">{String(Math.floor(ovenTime[activeBatch.id] / 60)).padStart(2,'0')}:{String(Math.round(ovenTime[activeBatch.id]) % 60).padStart(2,'0')}</div>
+              <div className="oven-timer red">
+                {String(Math.floor(ovenTime[activeBatch.id] / 60)).padStart(2,'0')}:{String(Math.round(ovenTime[activeBatch.id]) % 60).padStart(2,'0')}
+              </div>
               <div className="progress" style={{ width: 100 }}>
                 <div className="progress-fill" style={{ width: `${((ovenDuration - ovenTime[activeBatch.id]) / ovenDuration) * 100}%` }} />
               </div>
             </div>
-          ) : readyBatches.length > 0 ? (
-            <div className="oven-timer green">¡Listo!</div>
           ) : (
-            <div className="oven-timer" style={{ color: 'var(--muted)', fontSize: 20 }}>Vacío</div>
+            <div className="oven-timer" style={{ color: 'var(--muted)', fontSize: 18 }}>
+              {readyBatches.length > 0 ? '¡Listo!' : 'Vacío'}
+            </div>
           )}
         </div>
 
-        <div className="lote-dots">
+        <div className="lote-dots" style={{ marginTop: 10 }}>
           {Array.from({ length: batchSize }).map((_, i) => (
-            <div key={i} className={`lote-dot ${i < readyOrders.length ? (readyBatches.length > 0 ? 'done' : 'filled') : ''}`} />
+            <div key={i} className={`lote-dot ${
+              i < readyOrders.length
+                ? (activeBatch ? 'filled' : 'done')
+                : ''
+            }`} />
           ))}
         </div>
         <p className="small mt-8">{readyOrders.length} / {batchSize} productos listos para entrar</p>
       </div>
 
-      {readyBatches.length > 0 && readyBatches.map(b => (
-        <button key={b.id} className="btn-full btn-success btn-xl" onClick={() => releaseBatch(b)}>
-          🏭 Liberar lote #{b.batch_number} al Almacén
-        </button>
-      ))}
+      {activeBatch?.status === 'procesando' && (
+        <div className="alert alert-warn">
+          El horno está procesando. Se liberará automáticamente al terminar.
+        </div>
+      )}
 
-      {!activeBatch && readyBatches.length === 0 && readyOrders.length >= batchSize && (
+      {!activeBatch && readyOrders.length >= batchSize && (
         <button className="btn-full btn-xl" onClick={startOven}>
           🔥 Iniciar Horno — {batchSize} productos
         </button>
       )}
 
-      {activeBatch?.status === 'procesando' && (
-        <div className="alert alert-warn">El horno está procesando. Espera que termine para liberar el lote.</div>
+      {!activeBatch && readyOrders.length < batchSize && readyOrders.length > 0 && (
+        <div className="alert alert-info">
+          Esperando {batchSize - readyOrders.length} producto(s) más para completar el lote.
+        </div>
       )}
 
       <div className="card">
         <h3>En espera del horno ({readyOrders.length})</h3>
         <div className="flex" style={{ gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
-          {readyOrders.map(o => <span key={o.id}>{productPill(o.product)}</span>)}
+          {readyOrders.map(o => <span key={o.id}><ProductPill p={o.product} /></span>)}
           {readyOrders.length === 0 && <p className="small">Nada en espera</p>}
         </div>
+      </div>
+
+      <div className="card">
+        <h3>Lotes procesados: {batches.filter(b => b.status === 'liberado').length}</h3>
       </div>
     </div>
   )
 }
 
-function AlmacenPanel({ orders, onUpdate }: { orders: Order[], onUpdate: (id: string, d: Partial<Order>) => void }) {
+// ─── ALMACÉN ─────────────────────────────────────────────────────────────────
+function AlmacenPanel({ orders, onUpdate }: {
+  orders: Order[], onUpdate: (id: string, d: Partial<Order>) => void,
+}) {
   const enAlmacen = orders.filter(o => o.status === 'en_almacen')
   return (
     <div className="grid">
-      <div className="alert alert-info">Cuando el cliente pida un producto, entregáselo físicamente y regístralo aquí.</div>
-      {enAlmacen.length === 0 && <div className="card text-center"><p>No hay productos en almacén aún.</p></div>}
+      <div className="alert alert-info">
+        Cuando el cliente pida un producto, entrégaselo físicamente y regístralo aquí.
+      </div>
+      {enAlmacen.length === 0 && (
+        <div className="card text-center"><p>No hay productos en almacén aún.</p></div>
+      )}
       {enAlmacen.map(o => (
         <div key={o.id} className="order-card">
           <div className="order-row">
-            <div style={{ fontSize: 16, fontWeight: 700 }}>#{o.sequence_number} {productPill(o.product)}</div>
+            <div style={{ fontSize: 16, fontWeight: 700 }}>
+              #{o.sequence_number} <ProductPill p={o.product} />
+            </div>
           </div>
           <div className="grid-2" style={{ gap: 8 }}>
-            <button className="btn-success" style={{ fontSize: 14, minHeight: 44 }}
+            <button className="btn-success" style={{ fontSize: 13, minHeight: 44 }}
               onClick={() => onUpdate(o.id, { status: 'entregado_ok', delivered_at: new Date().toISOString() })}>
               ✓ Entregado a tiempo
             </button>
-            <button className="btn-warning" style={{ fontSize: 14, minHeight: 44 }}
+            <button className="btn-warning" style={{ fontSize: 13, minHeight: 44 }}
               onClick={() => onUpdate(o.id, { status: 'entregado_tarde', delivered_at: new Date().toISOString() })}>
               ⚠ Entregado tarde
             </button>
           </div>
-          <button className="btn-full btn-danger" style={{ fontSize: 13, minHeight: 38 }}
+          <button className="btn-full btn-danger" style={{ fontSize: 12, minHeight: 38, marginTop: 6 }}
             onClick={() => onUpdate(o.id, { status: 'no_entregado', delivered_at: new Date().toISOString() })}>
             ✗ No entregado
           </button>
@@ -386,24 +440,29 @@ function AlmacenPanel({ orders, onUpdate }: { orders: Order[], onUpdate: (id: st
       ))}
       <div className="card">
         <div className="grid-3">
-          <div className="metric good"><div className="val">{orders.filter(o=>o.status==='entregado_ok').length}</div><div className="lbl">A tiempo</div></div>
-          <div className="metric warn"><div className="val">{orders.filter(o=>o.status==='entregado_tarde').length}</div><div className="lbl">Tarde</div></div>
-          <div className="metric bad"><div className="val">{orders.filter(o=>o.status==='no_entregado').length}</div><div className="lbl">Perdidas</div></div>
+          <div className="metric good"><div className="val">{orders.filter(o => o.status === 'entregado_ok').length}</div><div className="lbl">A tiempo</div></div>
+          <div className="metric warn"><div className="val">{orders.filter(o => o.status === 'entregado_tarde').length}</div><div className="lbl">Tarde</div></div>
+          <div className="metric bad"><div className="val">{orders.filter(o => o.status === 'no_entregado').length}</div><div className="lbl">Perdidos</div></div>
         </div>
       </div>
     </div>
   )
 }
 
+// ─── RECICLAJE ────────────────────────────────────────────────────────────────
 function ReciclajePanel({ orders }: { orders: Order[] }) {
-  const delivered = orders.filter(o => ['entregado_ok','entregado_tarde','no_entregado'].includes(o.status))
+  const delivered = orders.filter(o =>
+    ['entregado_ok','entregado_tarde','no_entregado'].includes(o.status)
+  )
   return (
     <div className="grid">
-      <div className="alert alert-info">Recoge los productos entregados, desármalos y devuelve las piezas al área de materiales.</div>
+      <div className="alert alert-info">
+        Recoge los productos entregados, desármalos y devuelve las piezas al área de materiales.
+      </div>
       <div className="card">
         <h3>Productos para reciclar ({delivered.length})</h3>
         <div className="flex" style={{ gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
-          {delivered.map(o => <span key={o.id}>{productPill(o.product)}</span>)}
+          {delivered.map(o => <span key={o.id}><ProductPill p={o.product} /></span>)}
         </div>
         {delivered.length === 0 && <p className="small mt-8">Aún no hay productos para reciclar.</p>}
       </div>

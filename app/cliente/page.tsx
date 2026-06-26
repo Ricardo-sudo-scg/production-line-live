@@ -3,211 +3,319 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 import { getSession } from '../../lib/session'
-import { DEMAND_SEQUENCE_T1, DEMAND_SEQUENCE_T2, type Order, type PlayerSession, type Product, type Room } from '../../lib/types'
-
-const PRODUCT_COLOR: Record<Product, string> = { Bicolor: '#3b82f6', Amarillo: '#eab308', Rojo: '#ef4444' }
+import {
+  DEMAND_SEQUENCE_T1, DEMAND_SEQUENCE_T2,
+  PRODUCT_COLOR, PRODUCT_LABEL,
+  type Order, type PlayerSession, type Product,
+} from '../../lib/types'
 
 export default function ClientePage() {
-  const [session, setSession] = useState<PlayerSession | null>(null)
-  const [room, setRoom] = useState<Room | null>(null)
-  const [orders, setOrders] = useState<Order[]>([])
-  const [currentPedidoIdx, setCurrentPedidoIdx] = useState(0)
-  const [nextIn, setNextIn] = useState(0)
-  const [running, setRunning] = useState(false)
-  const [interval, setIntervalSec] = useState(20)
-  const [sequence, setSequence] = useState<'T1' | 'T2'>('T1')
-  const [npsSubmitted, setNpsSubmitted] = useState(false)
-  const [msg, setMsg] = useState('')
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const [session, setSession]         = useState<PlayerSession | null>(null)
+  const [orders, setOrders]           = useState<Order[]>([])
+  const [currentIdx, setCurrentIdx]   = useState(0)
+  const [nextIn, setNextIn]           = useState(0)
+  const [running, setRunning]         = useState(false)
+  const [intervalSec, setIntervalSec] = useState(20)
+  const [vista, setVista]             = useState<'activa' | 'hoja'>('activa')
+  const timerRef    = useRef<ReturnType<typeof setInterval> | null>(null)
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const idxRef      = useRef(0)
+  const sessionRef  = useRef<PlayerSession | null>(null)
 
   useEffect(() => {
     const s = getSession()
     if (!s || s.role !== 'Cliente') { window.location.href = '/'; return }
     setSession(s)
+    sessionRef.current = s
   }, [])
 
-  const loadData = useCallback(async (s: PlayerSession) => {
-    const [{ data: r }, { data: o }] = await Promise.all([
-      supabase.from('rooms').select('*').eq('id', s.roomId).single(),
-      supabase.from('orders').select('*').eq('room_id', s.roomId).eq('line', s.line).order('sequence_number'),
-    ])
-    setRoom(r as Room)
-    setOrders((o || []) as Order[])
+  const loadOrders = useCallback(async (s: PlayerSession) => {
+    const { data } = await supabase
+      .from('orders').select('*')
+      .eq('room_id', s.roomId).eq('line', s.line)
+      .order('sequence_number')
+    setOrders((data || []) as Order[])
   }, [])
 
   useEffect(() => {
     if (!session) return
-    loadData(session)
-    const ch = supabase.channel('cliente-' + session.roomId)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `room_id=eq.${session.roomId}` }, () => loadData(session))
+    loadOrders(session)
+    const ch = supabase.channel('cliente-' + session.roomId + session.line)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders',
+        filter: `room_id=eq.${session.roomId}` }, () => loadOrders(session))
       .subscribe()
     return () => { supabase.removeChannel(ch) }
-  }, [session, loadData])
+  }, [session, loadOrders])
 
-  const seq = sequence === 'T1' ? DEMAND_SEQUENCE_T1 : DEMAND_SEQUENCE_T2
+  // Línea A → T1, Línea B → T2 automático
+  const seq = session?.line === 'B' ? DEMAND_SEQUENCE_T2 : DEMAND_SEQUENCE_T1
+
+  async function createOrder(s: PlayerSession, idx: number) {
+    if (idx >= seq.length) return
+    // Marcar pedido anterior como perdido si no fue calificado
+    if (idx > 0) {
+      const { data: prev } = await supabase
+        .from('orders').select('*')
+        .eq('room_id', s.roomId).eq('line', s.line)
+        .eq('sequence_number', idx).maybeSingle()
+      if (prev && !prev.client_verdict) {
+        await supabase.from('orders').update({
+          client_verdict: 'no_entregado',
+          status: 'no_entregado',
+          delivered_at: new Date().toISOString(),
+        }).eq('id', prev.id)
+      }
+    }
+    await supabase.from('orders').insert({
+      room_id:         s.roomId,
+      line:            s.line,
+      sequence_number: idx + 1,
+      product:         seq[idx],
+      status:          'pendiente',
+      requested_at:    new Date().toISOString(),
+    })
+  }
 
   function startDemand() {
-    if (!session) return
+    const s = sessionRef.current
+    if (!s) return
     setRunning(true)
-    setNextIn(interval)
+    setNextIn(intervalSec)
+    idxRef.current = currentIdx
+
+    // Primer pedido inmediato
+    createOrder(s, idxRef.current)
+    idxRef.current++
+    setCurrentIdx(idxRef.current)
 
     countdownRef.current = setInterval(() => {
-      setNextIn(prev => {
-        if (prev <= 1) return interval
-        return prev - 1
-      })
+      setNextIn(prev => prev <= 1 ? intervalSec : prev - 1)
     }, 1000)
 
-    timerRef.current = setInterval(async () => {
-      setCurrentPedidoIdx(prev => {
-        const idx = prev
-        if (idx >= seq.length) {
-          stopDemand()
-          return prev
-        }
-        const product = seq[idx]
-        supabase.from('orders').insert({
-          room_id: session!.roomId,
-          line: session!.line,
-          sequence_number: idx + 1,
-          product,
-          status: 'pendiente',
-          requested_at: new Date().toISOString(),
-        })
-        return idx + 1
-      })
-    }, interval * 1000)
+    timerRef.current = setInterval(() => {
+      const cur = idxRef.current
+      if (cur >= seq.length) { stopDemand(); return }
+      createOrder(s, cur)
+      idxRef.current++
+      setCurrentIdx(idxRef.current)
+      setNextIn(intervalSec)
+    }, intervalSec * 1000)
   }
 
   function stopDemand() {
     setRunning(false)
-    if (timerRef.current) clearInterval(timerRef.current)
+    if (timerRef.current)    clearInterval(timerRef.current)
     if (countdownRef.current) clearInterval(countdownRef.current)
   }
 
-  useEffect(() => () => { stopDemand() }, [])
+  useEffect(() => () => stopDemand(), [])
 
-  async function markVerdict(orderId: string, verdict: 'ok' | 'tarde' | 'no_entregado') {
-    const statusMap = { ok: 'entregado_ok', tarde: 'entregado_tarde', no_entregado: 'no_entregado' }
+  async function markVerdict(order: Order, verdict: 'ok' | 'tarde' | 'no_entregado') {
+    const statusMap = {
+      ok:            'entregado_ok',
+      tarde:         'entregado_tarde',
+      no_entregado:  'no_entregado',
+    }
+    // NPS automático: 2=ok, 1=tarde, 0=perdido
+    const nps = verdict === 'ok' ? 2 : verdict === 'tarde' ? 1 : 0
     await supabase.from('orders').update({
       client_verdict: verdict,
-      status: statusMap[verdict],
-      delivered_at: new Date().toISOString(),
-    }).eq('id', orderId)
-  }
-
-  async function submitNps(score: number) {
-    if (!session) return
-    await supabase.from('nps_responses').insert({ room_id: session.roomId, line: session.line, score })
-    setNpsSubmitted(true)
+      status:         statusMap[verdict],
+      delivered_at:   new Date().toISOString(),
+    }).eq('id', order.id)
+    // Guardar NPS automático
+    if (session) {
+      await supabase.from('nps_responses').insert({
+        room_id: session.roomId,
+        line:    session.line,
+        score:   nps,
+      })
+    }
   }
 
   if (!session) return null
 
-  const pendingVerdicts = orders.filter(o => !o.client_verdict && o.status !== 'pendiente')
-  const withVerdict = orders.filter(o => o.client_verdict)
-  const ok = withVerdict.filter(o => o.client_verdict === 'ok').length
-  const tarde = withVerdict.filter(o => o.client_verdict === 'tarde').length
-  const noEnt = withVerdict.filter(o => o.client_verdict === 'no_entregado').length
-  const nextProduct = seq[currentPedidoIdx]
+  const activeOrder   = orders.find(o => !o.client_verdict && o.sequence_number === currentIdx)
+  const withVerdict   = orders.filter(o => o.client_verdict)
+  const ok            = withVerdict.filter(o => o.client_verdict === 'ok').length
+  const tarde         = withVerdict.filter(o => o.client_verdict === 'tarde').length
+  const perdidos      = withVerdict.filter(o => o.client_verdict === 'no_entregado').length
+  const currentProduct: Product | undefined = seq[currentIdx - 1]
+  const total         = seq.length
 
   return (
     <main style={{ padding: 16, maxWidth: 420, margin: '0 auto' }}>
-      <div style={{ textAlign: 'center', marginBottom: 20 }}>
-        <span className="badge badge-danger">🛒 CLIENTE EXTERNO</span>
-        <h1 style={{ fontSize: 20, marginTop: 8 }}>Línea {session.line}</h1>
-        <p className="small">Vista privada — no mostrar a la empresa</p>
+      <div style={{ textAlign: 'center', marginBottom: 14 }}>
+        <span className="badge badge-danger">🛒 CLIENTE — Línea {session.line}</span>
+        <p className="small" style={{ marginTop: 4 }}>Vista privada — no mostrar a la empresa</p>
       </div>
 
-      {msg && <div className="alert alert-danger">{msg}</div>}
+      {/* TABS */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
+        <button
+          onClick={() => setVista('activa')}
+          style={{ flex: 1, padding: '10px', borderRadius: 10, border: 'none', fontWeight: 700, fontSize: 13, cursor: 'pointer', background: vista === 'activa' ? '#2563eb' : '#e0e7ff', color: vista === 'activa' ? 'white' : '#1e40af' }}>
+          📦 Pedido actual
+        </button>
+        <button
+          onClick={() => setVista('hoja')}
+          style={{ flex: 1, padding: '10px', borderRadius: 10, border: 'none', fontWeight: 700, fontSize: 13, cursor: 'pointer', background: vista === 'hoja' ? '#2563eb' : '#e0e7ff', color: vista === 'hoja' ? 'white' : '#1e40af' }}>
+          📋 Mis pedidos ({currentIdx}/{total})
+        </button>
+      </div>
 
-      {!running ? (
-        <div className="card grid" style={{ marginBottom: 16 }}>
-          <h2>Configurar demanda</h2>
-          <label>
-            Intervalo entre pedidos (segundos)
-            <input type="number" min={5} max={120} value={interval}
-              onChange={e => setIntervalSec(Number(e.target.value))} />
-          </label>
-          <label>
-            Secuencia de pedidos
-            <select value={sequence} onChange={e => setSequence(e.target.value as 'T1' | 'T2')}>
-              <option value="T1">Temporada 1 (40 pedidos)</option>
-              <option value="T2">Temporada 2 (40 pedidos)</option>
-            </select>
-          </label>
-          <button className="btn-full btn-xl btn-success" onClick={startDemand}>
-            ▶ Iniciar demanda
-          </button>
-          <p className="small text-center">Los pedidos se generarán automáticamente cada {interval} segundos.</p>
-        </div>
-      ) : (
-        <div className="card" style={{ marginBottom: 16, textAlign: 'center' }}>
-          <div className="badge badge-live" style={{ marginBottom: 8 }}>● Demanda activa</div>
-          <div style={{ fontSize: 48, fontWeight: 800, color: nextProduct ? PRODUCT_COLOR[nextProduct] : '#64748b', margin: '12px 0' }}>
-            {nextProduct || '—'}
+      {/* VISTA ACTIVA */}
+      {vista === 'activa' && (
+        <>
+          {!running ? (
+            <div className="card grid" style={{ marginBottom: 14 }}>
+              <h2>Configurar demanda</h2>
+              <p className="small">Línea {session.line} → Secuencia {session.line === 'A' ? 'T1' : 'T2'} (40 pedidos)</p>
+              <label>
+                Intervalo entre pedidos (segundos)
+                <input type="number" min={5} max={120} value={intervalSec}
+                  onChange={e => setIntervalSec(Number(e.target.value))} />
+              </label>
+              <button className="btn-full btn-success" style={{ fontSize: 18, minHeight: 56, marginTop: 8 }} onClick={startDemand}>
+                ▶ Iniciar demanda
+              </button>
+            </div>
+          ) : (
+            <div className="card" style={{ marginBottom: 14, textAlign: 'center' }}>
+              <span className="badge badge-live" style={{ marginBottom: 8 }}>● Demanda activa</span>
+              <div style={{ fontSize: 12, color: '#64748b', marginBottom: 4 }}>
+                Pedido <strong>{currentIdx}</strong> de <strong>{total}</strong>
+              </div>
+              {currentProduct && (
+                <div style={{ fontSize: 52, fontWeight: 800, color: PRODUCT_COLOR[currentProduct], margin: '8px 0' }}>
+                  {currentProduct}
+                </div>
+              )}
+              <p className="small">Próximo pedido en</p>
+              <div style={{ fontSize: 40, fontWeight: 800, fontVariantNumeric: 'tabular-nums', color: '#0f172a' }}>
+                {nextIn}s
+              </div>
+              <button className="btn-ghost btn-full" style={{ marginTop: 10, fontSize: 13 }} onClick={stopDemand}>
+                ⏹ Pausar
+              </button>
+            </div>
+          )}
+
+          {/* PEDIDO ACTIVO PARA CALIFICAR */}
+          {activeOrder && (
+            <div className="card grid" style={{ marginBottom: 14, borderColor: '#fca5a5', background: '#fff5f5' }}>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#64748b' }}>
+                  Califica el pedido #{activeOrder.sequence_number}
+                </div>
+                <div style={{ fontSize: 36, fontWeight: 800, color: PRODUCT_COLOR[activeOrder.product], margin: '6px 0' }}>
+                  {activeOrder.product}
+                </div>
+                <div style={{ fontSize: 11, color: '#64748b' }}>¿Cómo llegó?</div>
+              </div>
+              <div className="grid-3" style={{ gap: 8 }}>
+                <button
+                  style={{ background: '#16a34a', color: 'white', border: 'none', borderRadius: 12, padding: '14px 4px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+                  onClick={() => markVerdict(activeOrder, 'ok')}>
+                  ✓<br />A tiempo
+                </button>
+                <button
+                  style={{ background: '#d97706', color: 'white', border: 'none', borderRadius: 12, padding: '14px 4px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+                  onClick={() => markVerdict(activeOrder, 'tarde')}>
+                  ⚠<br />Tarde
+                </button>
+                <button
+                  style={{ background: '#dc2626', color: 'white', border: 'none', borderRadius: 12, padding: '14px 4px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+                  onClick={() => markVerdict(activeOrder, 'no_entregado')}>
+                  ✗<br />No recibí
+                </button>
+              </div>
+              <p className="small text-center">
+                A tiempo = ya estaba listo · Tarde = llegó después · No recibí = no llegó
+              </p>
+            </div>
+          )}
+
+          {/* RESUMEN */}
+          <div className="card">
+            <div className="grid-3">
+              <div className="metric good"><div className="val">{ok}</div><div className="lbl">A tiempo</div></div>
+              <div className="metric warn"><div className="val">{tarde}</div><div className="lbl">Tarde</div></div>
+              <div className="metric bad"><div className="val">{perdidos}</div><div className="lbl">Perdidos</div></div>
+            </div>
           </div>
-          <p className="small">Pedido #{currentPedidoIdx + 1} de {seq.length}</p>
-          <div style={{ marginTop: 12 }}>
-            <p className="small">Próximo pedido en:</p>
-            <div style={{ fontSize: 32, fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{nextIn}s</div>
-          </div>
-          <button className="btn-ghost btn-full" style={{ marginTop: 12, fontSize: 13 }} onClick={stopDemand}>
-            ⏹ Pausar demanda
-          </button>
-        </div>
+        </>
       )}
 
-      {pendingVerdicts.length > 0 && (
-        <div className="card grid" style={{ marginBottom: 16 }}>
-          <h2>Pedidos para calificar ({pendingVerdicts.length})</h2>
-          {pendingVerdicts.map(o => (
-            <div key={o.id} className="order-card">
-              <div className="order-row">
-                <div style={{ fontWeight: 700 }}>
-                  #{o.sequence_number}
-                  <span style={{ marginLeft: 8, display: 'inline-block', width: 12, height: 12, borderRadius: '50%', background: PRODUCT_COLOR[o.product], verticalAlign: 'middle' }} />
-                  {' '}{o.product}
-                </div>
+      {/* VISTA HOJA — lista completa de 40 pedidos */}
+      {vista === 'hoja' && (
+        <div className="card">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <h2 style={{ margin: 0 }}>Mis pedidos</h2>
+            <div className="grid-3" style={{ gap: 6 }}>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 16, fontWeight: 800, color: '#16a34a' }}>{ok}</div>
+                <div style={{ fontSize: 9, color: '#64748b' }}>OK</div>
               </div>
-              <div className="grid-3" style={{ gap: 6 }}>
-                <button className="btn-success" style={{ fontSize: 12, minHeight: 40, padding: '8px 4px' }} onClick={() => markVerdict(o.id, 'ok')}>
-                  ✓ A tiempo
-                </button>
-                <button className="btn-warning" style={{ fontSize: 12, minHeight: 40, padding: '8px 4px' }} onClick={() => markVerdict(o.id, 'tarde')}>
-                  ⚠ Tarde
-                </button>
-                <button className="btn-danger" style={{ fontSize: 12, minHeight: 40, padding: '8px 4px' }} onClick={() => markVerdict(o.id, 'no_entregado')}>
-                  ✗ No recibí
-                </button>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 16, fontWeight: 800, color: '#d97706' }}>{tarde}</div>
+                <div style={{ fontSize: 9, color: '#64748b' }}>Tarde</div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 16, fontWeight: 800, color: '#dc2626' }}>{perdidos}</div>
+                <div style={{ fontSize: 9, color: '#64748b' }}>Perdidos</div>
               </div>
             </div>
-          ))}
-        </div>
-      )}
-
-      <div className="card grid" style={{ marginBottom: 16 }}>
-        <h3>Mi registro</h3>
-        <div className="grid-3">
-          <div className="metric good"><div className="val">{ok}</div><div className="lbl">A tiempo</div></div>
-          <div className="metric warn"><div className="val">{tarde}</div><div className="lbl">Tarde</div></div>
-          <div className="metric bad"><div className="val">{noEnt}</div><div className="lbl">No recibí</div></div>
-        </div>
-      </div>
-
-      {withVerdict.length >= 10 && !npsSubmitted && (
-        <div className="card grid" style={{ marginBottom: 16 }}>
-          <h2 style={{ textAlign: 'center' }}>¿Qué tan satisfecho estás?</h2>
-          <p className="text-center">Como cliente, ¿cómo calificarías el servicio recibido?</p>
-          <div className="nps-row">
-            <button className="nps-btn s0" onClick={() => submitNps(0)}>😞<br /><span style={{ fontSize: 12 }}>Insatisfecho</span></button>
-            <button className="nps-btn s1" onClick={() => submitNps(1)}>😐<br /><span style={{ fontSize: 12 }}>Regular</span></button>
-            <button className="nps-btn s2" onClick={() => submitNps(2)}>😊<br /><span style={{ fontSize: 12 }}>Satisfecho</span></button>
           </div>
+          <div style={{ overflowY: 'auto', maxHeight: 420 }}>
+            {seq.map((product, i) => {
+              const num   = i + 1
+              const order = orders.find(o => o.sequence_number === num)
+              const verdict = order?.client_verdict
+              const isCurrent = num === currentIdx
+              return (
+                <div key={i} style={{
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  padding: '8px 10px', borderRadius: 10, marginBottom: 4,
+                  background: isCurrent ? '#eff6ff' : '#f8fafc',
+                  border: `1.5px solid ${isCurrent ? '#3b82f6' : '#e2e8f0'}`,
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700, minWidth: 24 }}>#{num}</span>
+                    <span style={{
+                      padding: '2px 8px', borderRadius: 99, fontSize: 12, fontWeight: 700,
+                      background: PRODUCT_COLOR[product] + '22',
+                      border: `1.5px solid ${PRODUCT_COLOR[product]}`,
+                      color: '#0f172a',
+                    }}>
+                      {PRODUCT_LABEL[product]} {product}
+                    </span>
+                  </div>
+                  <span style={{ fontSize: 14, fontWeight: 700 }}>
+                    {verdict === 'ok'           ? '✓'  :
+                     verdict === 'tarde'        ? '⚠'  :
+                     verdict === 'no_entregado' ? '✗'  :
+                     isCurrent                  ? '👉' : '·'}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+          {withVerdict.length === total && (
+            <div style={{ marginTop: 12, background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 10, padding: 10, textAlign: 'center' }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#166534' }}>Simulación completada</div>
+              <div style={{ fontSize: 12, color: '#166534', marginTop: 4 }}>
+                {ok} a tiempo · {tarde} tarde · {perdidos} perdidos
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: '#166534', marginTop: 4 }}>
+                NPS promedio: {ok > 0 || tarde > 0 || perdidos > 0
+                  ? ((ok * 2 + tarde * 1 + perdidos * 0) / (ok + tarde + perdidos)).toFixed(1)
+                  : '-'} / 2
+              </div>
+            </div>
+          )}
         </div>
       )}
-      {npsSubmitted && <div className="alert alert-success text-center">¡Gracias! Tu satisfacción fue registrada.</div>}
     </main>
   )
 }

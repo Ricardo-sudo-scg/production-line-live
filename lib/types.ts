@@ -9,11 +9,11 @@ export type ClientVerdict = 'ok' | 'tarde' | 'no_entregado'
 export type OvenStatus = 'cargando' | 'procesando' | 'listo' | 'liberado'
 export type Role =
   | 'Cliente'
-  | 'Jefe de Planificacion Estrategica'
-  | 'Tecnico de Fabricacion Alpha'
-  | 'Tecnico de Fabricacion Beta'
-  | 'Ingeniero de Procesos Termicos'
-  | 'Gerente de Logistica y Distribucion'
+  | 'Jefe de Planificación Estratégica'
+  | 'Técnico de Fabricación Alpha'
+  | 'Técnico de Fabricación Beta'
+  | 'Ingeniero de Procesos Térmicos'
+  | 'Gerente de Logística y Distribución'
   | 'Coordinador de Materiales'
   | 'Docente'
 
@@ -94,65 +94,69 @@ export type PlayerSession = {
 export const PRODUCTS: Product[] = ['Bicolor', 'Amarillo', 'Rojo']
 
 export const PRODUCT_COLOR: Record<Product, string> = {
-  Bicolor: '#3b82f6',
+  Bicolor:  '#3b82f6',
   Amarillo: '#eab308',
-  Rojo: '#ef4444',
+  Rojo:     '#ef4444',
 }
 
 export const PRODUCT_LABEL: Record<Product, string> = {
-  Bicolor: 'Bc',
+  Bicolor:  'Bc',
   Amarillo: 'Am',
-  Rojo: 'R',
+  Rojo:     'R',
 }
 
 export const COMPANY_ROLES: Role[] = [
-  'Jefe de Planificacion Estrategica',
-  'Tecnico de Fabricacion Alpha',
-  'Tecnico de Fabricacion Beta',
-  'Ingeniero de Procesos Termicos',
-  'Gerente de Logistica y Distribucion',
+  'Jefe de Planificación Estratégica',
+  'Técnico de Fabricación Alpha',
+  'Técnico de Fabricación Beta',
+  'Ingeniero de Procesos Térmicos',
+  'Gerente de Logística y Distribución',
   'Coordinador de Materiales',
 ]
 
+// Secuencia T1 — Línea A
 export const DEMAND_SEQUENCE_T1: Product[] = [
   'Bicolor','Amarillo','Bicolor','Amarillo','Bicolor','Amarillo','Bicolor','Bicolor',
-  'Bicolor','Rojo','Bicolor','Bicolor','Amarillo','Rojo','Amarillo','Bicolor',
-  'Bicolor','Amarillo','Bicolor','Rojo','Rojo','Rojo','Rojo','Bicolor',
-  'Bicolor','Bicolor','Bicolor','Bicolor','Bicolor','Amarillo','Rojo','Rojo',
-  'Amarillo','Rojo','Amarillo','Bicolor','Amarillo','Bicolor','Bicolor','Rojo'
+  'Bicolor','Rojo',    'Bicolor','Bicolor', 'Amarillo','Rojo',   'Amarillo','Bicolor',
+  'Bicolor','Amarillo','Bicolor','Rojo',    'Rojo',   'Rojo',   'Rojo',    'Bicolor',
+  'Bicolor','Bicolor', 'Bicolor','Bicolor', 'Bicolor','Amarillo','Rojo',   'Rojo',
+  'Amarillo','Rojo',   'Amarillo','Bicolor','Amarillo','Bicolor','Bicolor','Rojo',
 ]
 
+// Secuencia T2 — Línea B
 export const DEMAND_SEQUENCE_T2: Product[] = [
-  'Bicolor','Bicolor','Bicolor','Rojo','Amarillo','Amarillo','Bicolor','Bicolor',
-  'Bicolor','Rojo','Bicolor','Bicolor','Bicolor','Bicolor','Bicolor','Bicolor',
-  'Rojo','Rojo','Bicolor','Amarillo','Rojo','Bicolor','Bicolor','Amarillo',
-  'Bicolor','Amarillo','Rojo','Bicolor','Amarillo','Bicolor','Rojo','Amarillo',
-  'Bicolor','Amarillo','Amarillo','Rojo','Rojo','Bicolor','Rojo','Amarillo'
+  'Bicolor','Bicolor', 'Bicolor','Rojo',    'Amarillo','Amarillo','Bicolor','Bicolor',
+  'Bicolor','Rojo',    'Bicolor','Bicolor', 'Bicolor', 'Bicolor', 'Bicolor','Bicolor',
+  'Rojo',   'Rojo',    'Bicolor','Amarillo','Rojo',    'Bicolor', 'Bicolor','Amarillo',
+  'Bicolor','Amarillo','Rojo',   'Bicolor', 'Amarillo','Bicolor', 'Rojo',   'Amarillo',
+  'Bicolor','Amarillo','Amarillo','Rojo',   'Rojo',    'Bicolor', 'Rojo',   'Amarillo',
 ]
 
+// Plan 8:4:4 — Línea A (se repite)
 export const PLAN_844: Product[] = [
-  ...Array(8).fill('Bicolor') as Product[],
+  ...Array(8).fill('Bicolor')  as Product[],
   ...Array(4).fill('Amarillo') as Product[],
-  ...Array(4).fill('Rojo') as Product[],
+  ...Array(4).fill('Rojo')     as Product[],
 ]
 
+// Plan 4:2:2 — Línea B (se repite)
 export const PLAN_422: Product[] = [
-  ...Array(4).fill('Bicolor') as Product[],
+  ...Array(4).fill('Bicolor')  as Product[],
   ...Array(2).fill('Amarillo') as Product[],
-  ...Array(2).fill('Rojo') as Product[],
+  ...Array(2).fill('Rojo')     as Product[],
 ]
 
 export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
-  pendiente: 'Pendiente',
+  pendiente:        'Pendiente',
   en_planificacion: 'En planificación',
-  ensamble1: 'En Ensamble 1',
-  ensamble1_listo: 'Listo para Ensamble 2',
-  ensamble2: 'En Ensamble 2',
-  ensamble2_listo: 'Listo para Horno',
-  esperando_horno: 'Esperando Horno',
-  en_horno: 'En Horno 🔥',
-  en_almacen: 'En Almacén',
-  entregado_ok: 'Entregado ✓',
-  entregado_tarde: 'Entregado tarde ⚠',
-  no_entregado: 'No entregado ✗',
+  ensamble1:        'En Ensamble 1',
+  ensamble1_listo:  'Listo para Ensamble 2',
+  ensamble2:        'En Ensamble 2',
+  ensamble2_listo:  'Listo para Horno',
+  esperando_horno:  'Esperando Horno',
+  en_horno:         'En Horno 🔥',
+  en_almacen:       'En Almacén',
+  entregado_ok:     'Entregado ✓',
+  entregado_tarde:  'Entregado tarde ⚠',
+  no_entregado:     'No entregado ✗',
 }

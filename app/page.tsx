@@ -3,61 +3,43 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { saveSession } from '../lib/session'
-import { COMPANY_ROLES, DEMAND_SEQUENCE_T1, type Role } from '../lib/types'
+import { COMPANY_ROLES, DEMAND_SEQUENCE_T1, type Line, type Role } from '../lib/types'
 
 export default function HomePage() {
-  const [name, setName] = useState('')
-  const [roomId, setRoomId] = useState('OPEN2026')
+  const [name, setName]       = useState('')
+  const [roomId, setRoomId]   = useState('OPEN2026')
+  const [role, setRole]       = useState<Role>('Técnico de Fabricación Alpha')
+  const [line, setLine]       = useState<Line>('A')
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+  const [error, setError]     = useState('')
+
+  async function ensureRoom(rid: string) {
+    const { data } = await supabase.from('rooms').select('id').eq('id', rid).single()
+    if (!data) {
+      await supabase.from('rooms').insert({
+        id: rid,
+        status: 'waiting',
+        demand_sequence:   DEMAND_SEQUENCE_T1,
+        demand_interval_sec: 20,
+        oven_a_batch:      8,
+        oven_b_batch:      4,
+        oven_duration_sec: 80,
+        prep_time_sec:     60,
+      })
+    }
+  }
 
   async function handleJoin(e: React.FormEvent) {
     e.preventDefault()
     if (!name.trim()) { setError('Escribe tu nombre'); return }
-    setLoading(true)
-    setError('')
-
+    setLoading(true); setError('')
     const rid = roomId.trim().toUpperCase()
-
-    // Crear sala si no existe
-    const { data: existing } = await supabase.from('rooms').select('id,status').eq('id', rid).single()
-    if (!existing) {
-      await supabase.from('rooms').insert({
-        id: rid,
-        status: 'waiting',
-        demand_sequence: DEMAND_SEQUENCE_T1,
-        demand_interval_sec: 20,
-        oven_a_batch: 8,
-        oven_b_batch: 4,
-        oven_duration_sec: 80,
-        prep_time_sec: 60,
-      })
-    }
-
-    // Contar jugadores por linea y rol para asignar automaticamente
-    const { data: players } = await supabase.from('players').select('line,role').eq('room_id', rid)
-    const countA = (players || []).filter(p => p.line === 'A').length
-    const countB = (players || []).filter(p => p.line === 'B').length
-
-    // Asignar linea al que tenga menos jugadores
-    const line = countA <= countB ? 'A' : 'B'
-
-    // Ver roles ocupados en esa linea
-    const rolesInLine = (players || []).filter(p => p.line === line).map(p => p.role)
-    const availableRoles = COMPANY_ROLES.filter(r => !rolesInLine.includes(r))
-    const assignedRole: Role = availableRoles.length > 0 ? availableRoles[0] : COMPANY_ROLES[0]
-
-    // Insertar jugador
-    const { data: player, error: pErr } = await supabase.from('players').insert({
-      room_id: rid,
-      name: name.trim(),
-      line,
-      role: assignedRole,
-    }).select().single()
-
+    await ensureRoom(rid)
+    const { data: player, error: pErr } = await supabase.from('players')
+      .insert({ room_id: rid, name: name.trim(), line, role })
+      .select().single()
     if (pErr || !player) { setError('Error al unirse. Intenta de nuevo.'); setLoading(false); return }
-
-    saveSession({ roomId: rid, playerId: player.id, name: name.trim(), line, role: assignedRole })
+    saveSession({ roomId: rid, playerId: player.id, name: name.trim(), line, role })
     window.location.href = '/play'
   }
 
@@ -66,21 +48,10 @@ export default function HomePage() {
     if (!name.trim()) { setError('Escribe tu nombre'); return }
     setLoading(true)
     const rid = roomId.trim().toUpperCase()
-
-    const { data: existing } = await supabase.from('rooms').select('id').eq('id', rid).single()
-    if (!existing) {
-      await supabase.from('rooms').insert({
-        id: rid, status: 'waiting',
-        demand_sequence: DEMAND_SEQUENCE_T1,
-        demand_interval_sec: 20, oven_a_batch: 8, oven_b_batch: 4,
-        oven_duration_sec: 80, prep_time_sec: 60,
-      })
-    }
-
-    const { data: player } = await supabase.from('players').insert({
-      room_id: rid, name: name.trim(), line: 'A', role: 'Docente',
-    }).select().single()
-
+    await ensureRoom(rid)
+    const { data: player } = await supabase.from('players')
+      .insert({ room_id: rid, name: name.trim(), line: 'A', role: 'Docente' })
+      .select().single()
     if (player) {
       saveSession({ roomId: rid, playerId: player.id, name: name.trim(), line: 'A', role: 'Docente' })
       window.location.href = '/docente'
@@ -93,14 +64,12 @@ export default function HomePage() {
     if (!name.trim()) { setError('Escribe tu nombre'); return }
     setLoading(true)
     const rid = roomId.trim().toUpperCase()
-    const lineParam = new URLSearchParams(window.location.search).get('linea') as 'A' | 'B' || 'A'
-
-    const { data: player } = await supabase.from('players').insert({
-      room_id: rid, name: name.trim(), line: lineParam, role: 'Cliente',
-    }).select().single()
-
+    await ensureRoom(rid)
+    const { data: player } = await supabase.from('players')
+      .insert({ room_id: rid, name: name.trim(), line, role: 'Cliente' })
+      .select().single()
     if (player) {
-      saveSession({ roomId: rid, playerId: player.id, name: name.trim(), line: lineParam, role: 'Cliente' })
+      saveSession({ roomId: rid, playerId: player.id, name: name.trim(), line, role: 'Cliente' })
       window.location.href = '/cliente'
     }
     setLoading(false)
@@ -126,26 +95,34 @@ export default function HomePage() {
             Tu nombre
             <input value={name} onChange={e => setName(e.target.value)} placeholder="Ej. Ana García" />
           </label>
-
+          <label>
+            Línea
+            <select value={line} onChange={e => setLine(e.target.value as Line)}>
+              <option value="A">Línea A</option>
+              <option value="B">Línea B</option>
+            </select>
+          </label>
+          <label>
+            Tu rol
+            <select value={role} onChange={e => setRole(e.target.value as Role)}>
+              {COMPANY_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </label>
           <button type="submit" className="btn-full" disabled={loading}>
             {loading ? 'Conectando...' : '🏭 Unirme a la empresa'}
           </button>
-          <button type="button" className="btn-full btn-light" disabled={loading} onClick={handleCliente}>
-            🛒 Entrar como Cliente
-          </button>
-          <button type="button" className="btn-full btn-dark" disabled={loading} onClick={handleDocente}>
-            🎓 Entrar como Docente
-          </button>
+          <div className="grid-2" style={{ gap: 8 }}>
+            <button type="button" className="btn-light btn-full" disabled={loading} onClick={handleCliente}>
+              🛒 Cliente
+            </button>
+            <button type="button" className="btn-dark btn-full" disabled={loading} onClick={handleDocente}>
+              🎓 Docente
+            </button>
+          </div>
         </form>
 
-        <p className="small text-center mt-12">
-          Al unirte como empresa, el sistema te asigna tu rol y línea automáticamente.
-        </p>
-
         <div style={{ marginTop: 16, textAlign: 'center' }}>
-          <a href="/empresa" style={{ fontSize: 13, color: '#2563eb' }}>
-            📺 Ver pantalla de la empresa →
-          </a>
+          <a href="/empresa" style={{ fontSize: 13, color: '#2563eb' }}>📺 Ver pantalla empresa →</a>
         </div>
       </div>
     </main>
