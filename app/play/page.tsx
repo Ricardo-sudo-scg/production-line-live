@@ -42,16 +42,32 @@ export default function PlayPage() {
 
   useEffect(() => {
     if (!session) return
-    loadData(session)
-    const ch = supabase.channel('play-' + session.roomId + session.line)
+
+    let active = true
+    const s = session
+    const refresh = () => {
+      if (active) loadData(s)
+    }
+
+    refresh()
+
+    // Realtime + respaldo: si Supabase tarda en avisar, igual refresca cada 1.5 s.
+    const polling = setInterval(refresh, 1500)
+
+    const ch = supabase.channel('play-' + s.roomId + '-' + s.line)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'orders',
-        filter: `room_id=eq.${session.roomId}` }, () => loadData(session))
+        filter: `room_id=eq.${s.roomId}` }, refresh)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'oven_batches',
-        filter: `room_id=eq.${session.roomId}` }, () => loadData(session))
+        filter: `room_id=eq.${s.roomId}` }, refresh)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms',
-        filter: `id=eq.${session.roomId}` }, () => loadData(session))
+        filter: `id=eq.${s.roomId}` }, refresh)
       .subscribe()
-    return () => { supabase.removeChannel(ch) }
+
+    return () => {
+      active = false
+      clearInterval(polling)
+      supabase.removeChannel(ch)
+    }
   }, [session, loadData])
 
   async function update(id: string, data: Partial<Order>) {
@@ -424,16 +440,28 @@ function AlmacenPanel({ orders, onUpdate }: {
           </div>
           <div className="grid-2" style={{ gap: 8 }}>
             <button className="btn-success" style={{ fontSize: 13, minHeight: 44 }}
-              onClick={() => onUpdate(o.id, { status: 'entregado_ok', delivered_at: new Date().toISOString() })}>
+              onClick={() => onUpdate(o.id, {
+                status: 'entregado_ok',
+                client_verdict: 'ok',
+                delivered_at: new Date().toISOString(),
+              })}>
               ✓ Entregado a tiempo
             </button>
             <button className="btn-warning" style={{ fontSize: 13, minHeight: 44 }}
-              onClick={() => onUpdate(o.id, { status: 'entregado_tarde', delivered_at: new Date().toISOString() })}>
+              onClick={() => onUpdate(o.id, {
+                status: 'entregado_tarde',
+                client_verdict: 'tarde',
+                delivered_at: new Date().toISOString(),
+              })}>
               ⚠ Entregado tarde
             </button>
           </div>
           <button className="btn-full btn-danger" style={{ fontSize: 12, minHeight: 38, marginTop: 6 }}
-            onClick={() => onUpdate(o.id, { status: 'no_entregado', delivered_at: new Date().toISOString() })}>
+            onClick={() => onUpdate(o.id, {
+              status: 'no_entregado',
+              client_verdict: 'no_entregado',
+              delivered_at: new Date().toISOString(),
+            })}>
             ✗ No entregado
           </button>
         </div>
