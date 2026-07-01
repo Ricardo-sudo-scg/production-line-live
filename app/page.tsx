@@ -1,332 +1,94 @@
-'use client'
+"use client";
 
-import { useState } from 'react'
-import { useEffect, useState, type FormEvent } from 'react'
-import { supabase } from '../lib/supabase'
-import { saveSession } from '../lib/session'
-import { COMPANY_ROLES, DEMAND_SEQUENCE_T1, type Line, type Role } from '../lib/types'
-import { saveSession, getSession, clearSession } from '../lib/session'
-import {
-  COMPANY_ROLES,
-  DEMAND_SEQUENCE_T1,
-  type Line,
-  type PlayerSession,
-  type Role,
-} from '../lib/types'
+import { FormEvent, useState } from "react";
+import { PRODUCTS, ROLES, TEAMS, type Role } from "../lib/types";
+import { saveSession } from "../lib/session";
 
 export default function HomePage() {
-  const [name, setName]       = useState('')
-  const [roomId, setRoomId]   = useState('OPEN2026')
-  const [role, setRole]       = useState<Role>('Técnico de Fabricación Alpha')
-  const [line, setLine]       = useState<Line>('A')
-  const [name, setName] = useState('')
-  const [roomId, setRoomId] = useState('OPEN2026')
-  const [role, setRole] = useState<Role>('Técnico de Fabricación Alpha')
-  const [line, setLine] = useState<Line>('A')
-const [loading, setLoading] = useState(false)
-  const [error, setError]     = useState('')
-  const [error, setError] = useState('')
-  const [previousSession, setPreviousSession] = useState<PlayerSession | null>(null)
+  const [roomCode, setRoomCode] = useState("UTEC01");
+  const [name, setName] = useState("");
+  const [team, setTeam] = useState("A");
+  const [round, setRound] = useState(1);
+  const [role, setRole] = useState<Role>("Cliente");
 
-  useEffect(() => {
-    const saved = getSession()
-    if (saved) {
-      setPreviousSession(saved)
-    }
-  }, [])
-
-  function getRouteByRole(userRole: Role) {
-    if (userRole === 'Cliente') return '/cliente'
-    if (userRole === 'Docente') return '/docente'
-    return '/play'
-  }
-
-  function continuePreviousSession() {
-    if (!previousSession) return
-    window.location.href = getRouteByRole(previousSession.role)
-  }
-
-  function forgetPreviousSession() {
-    clearSession()
-    setPreviousSession(null)
-  }
-
-async function ensureRoom(rid: string) {
-const { data } = await supabase.from('rooms').select('id').eq('id', rid).single()
-
-if (!data) {
-await supabase.from('rooms').insert({
-id: rid,
-status: 'waiting',
-        demand_sequence:   DEMAND_SEQUENCE_T1,
-        demand_sequence: DEMAND_SEQUENCE_T1,
-demand_interval_sec: 20,
-        oven_a_batch:      8,
-        oven_b_batch:      4,
-        oven_a_batch: 8,
-        oven_b_batch: 4,
-oven_duration_sec: 80,
-        prep_time_sec:     60,
-        prep_time_sec: 60,
-})
-}
-}
-
-  async function handleJoin(e: React.FormEvent) {
-  async function handleJoin(e: FormEvent<HTMLFormElement>) {
-e.preventDefault()
-    if (!name.trim()) { setError('Escribe tu nombre'); return }
-    setLoading(true); setError('')
-
-    if (!name.trim()) {
-      setError('Escribe tu nombre')
-      return
-    }
-
-    setLoading(true)
-    setError('')
-
-const rid = roomId.trim().toUpperCase()
-
-await ensureRoom(rid)
-    const { data: player, error: pErr } = await supabase.from('players')
-      .insert({ room_id: rid, name: name.trim(), line, role })
-      .select().single()
-    if (pErr || !player) { setError('Error al unirse. Intenta de nuevo.'); setLoading(false); return }
-    saveSession({ roomId: rid, playerId: player.id, name: name.trim(), line, role })
-
-    const { data: player, error: pErr } = await supabase
-      .from('players')
-      .insert({
-        room_id: rid,
-        name: name.trim(),
-        line,
-        role,
-      })
-      .select()
-      .single()
-
-    if (pErr || !player) {
-      setError('Error al unirse. Intenta de nuevo.')
-      setLoading(false)
-      return
-    }
-
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
     saveSession({
-      roomId: rid,
-      playerId: player.id,
-      name: name.trim(),
-      line,
+      roomCode: roomCode.trim().toUpperCase(),
+      name: name.trim() || "Estudiante",
+      team,
+      round,
       role,
-    })
+    });
+    window.location.href = role === "Profesor" ? "/dashboard" : "/play";
+  }
 
-window.location.href = '/play'
-}
+  return (
+    <main className="hero">
+      <section className="card hero-card">
+        <span className="badge">Production Line Live</span>
+        <h1 style={{ marginTop: 14 }}>Juego LEGO con datos en vivo</h1>
+        <p>
+          Los estudiantes arman físicamente Bicolor, Amarillo y Rojo. Esta app registra pedidos,
+          tiempos, calidad y entregas desde el celular.
+        </p>
 
-  async function handleDocente(e: React.FormEvent) {
-    e.preventDefault()
-    if (!name.trim()) { setError('Escribe tu nombre'); return }
-  async function handleDocente() {
-    if (!name.trim()) {
-      setError('Escribe tu nombre')
-      return
-    }
-
-setLoading(true)
-    setError('')
-
-const rid = roomId.trim().toUpperCase()
-
-await ensureRoom(rid)
-    const { data: player } = await supabase.from('players')
-      .insert({ room_id: rid, name: name.trim(), line: 'A', role: 'Docente' })
-      .select().single()
-    if (player) {
-      saveSession({ roomId: rid, playerId: player.id, name: name.trim(), line: 'A', role: 'Docente' })
-      window.location.href = '/docente'
-
-    const { data: player, error: pErr } = await supabase
-      .from('players')
-      .insert({
-        room_id: rid,
-        name: name.trim(),
-        line: 'A',
-        role: 'Docente',
-      })
-      .select()
-      .single()
-
-    if (pErr || !player) {
-      setError('Error al entrar como docente.')
-      setLoading(false)
-      return
-}
-    setLoading(false)
-
-    saveSession({
-      roomId: rid,
-      playerId: player.id,
-      name: name.trim(),
-      line: 'A',
-      role: 'Docente',
-    })
-
-    window.location.href = '/docente'
-}
-
-  async function handleCliente(e: React.FormEvent) {
-    e.preventDefault()
-    if (!name.trim()) { setError('Escribe tu nombre'); return }
-  async function handleCliente() {
-    if (!name.trim()) {
-      setError('Escribe tu nombre')
-      return
-    }
-
-setLoading(true)
-    setError('')
-
-const rid = roomId.trim().toUpperCase()
-
-await ensureRoom(rid)
-    const { data: player } = await supabase.from('players')
-      .insert({ room_id: rid, name: name.trim(), line, role: 'Cliente' })
-      .select().single()
-    if (player) {
-      saveSession({ roomId: rid, playerId: player.id, name: name.trim(), line, role: 'Cliente' })
-      window.location.href = '/cliente'
-
-    const { data: player, error: pErr } = await supabase
-      .from('players')
-      .insert({
-        room_id: rid,
-        name: name.trim(),
-        line,
-        role: 'Cliente',
-      })
-      .select()
-      .single()
-
-    if (pErr || !player) {
-      setError('Error al entrar como cliente.')
-      setLoading(false)
-      return
-}
-    setLoading(false)
-
-    saveSession({
-      roomId: rid,
-      playerId: player.id,
-      name: name.trim(),
-      line,
-      role: 'Cliente',
-    })
-
-    window.location.href = '/cliente'
-}
-
-return (
-@@ -86,45 +196,95 @@
-
-{error && <div className="alert alert-danger mb-12">{error}</div>}
-
-        {previousSession && (
-          <div className="alert mb-12" style={{ background: '#eff6ff', borderColor: '#93c5fd' }}>
-            <strong>Ya tienes una sesión guardada</strong>
-            <p style={{ margin: '8px 0 12px' }}>
-              {previousSession.name} — {previousSession.role} — Línea {previousSession.line} — Sala{' '}
-              {previousSession.roomId}
-            </p>
-
-            <div className="grid-2" style={{ gap: 8 }}>
-              <button type="button" className="btn-full" onClick={continuePreviousSession}>
-                Continuar con mi rol
-              </button>
-
-              <button type="button" className="btn-light btn-full" onClick={forgetPreviousSession}>
-                Cambiar usuario
-              </button>
-            </div>
-          </div>
-        )}
-
-<form className="grid" onSubmit={handleJoin}>
-<label>
-Código de sala
-            <input value={roomId} onChange={e => setRoomId(e.target.value)} placeholder="Ej. OPEN2026" />
+        <form className="grid" onSubmit={handleSubmit}>
+          <label>
+            Código de sala
+            <input value={roomCode} onChange={(e) => setRoomCode(e.target.value)} />
+          </label>
+          <label>
+            Nombre
             <input
-              value={roomId}
-              onChange={(e) => setRoomId(e.target.value)}
-              placeholder="Ej. OPEN2026"
-            />
-</label>
-
-<label>
-Tu nombre
-            <input value={name} onChange={e => setName(e.target.value)} placeholder="Ej. Ana García" />
-            <input
+              placeholder="Ej. Ricardo"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Ej. Ana García"
             />
-</label>
-
-<label>
-Línea
-            <select value={line} onChange={e => setLine(e.target.value as Line)}>
-            <select value={line} onChange={(e) => setLine(e.target.value as Line)}>
-<option value="A">Línea A</option>
-<option value="B">Línea B</option>
-</select>
-</label>
-
-<label>
-Tu rol
-            <select value={role} onChange={e => setRole(e.target.value as Role)}>
-              {COMPANY_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+          </label>
+          <div className="grid-2">
+            <label>
+              Equipo
+              <select value={team} onChange={(e) => setTeam(e.target.value)}>
+                {TEAMS.map((item) => (
+                  <option key={item} value={item}>
+                    Equipo {item}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Ronda
+              <select value={round} onChange={(e) => setRound(Number(e.target.value))}>
+                {[1, 2, 3].map((item) => (
+                  <option key={item} value={item}>
+                    Ronda {item}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <label>
+            Rol
             <select value={role} onChange={(e) => setRole(e.target.value as Role)}>
-              {COMPANY_ROLES.map((r) => (
-                <option key={r} value={r}>
-                  {r}
+              {ROLES.map((item) => (
+                <option key={item} value={item}>
+                  {item}
                 </option>
               ))}
-</select>
-</label>
+            </select>
+          </label>
 
-<button type="submit" className="btn-full" disabled={loading}>
-{loading ? 'Conectando...' : '🏭 Unirme a la empresa'}
-</button>
-
-<div className="grid-2" style={{ gap: 8 }}>
-            <button type="button" className="btn-light btn-full" disabled={loading} onClick={handleCliente}>
-            <button
-              type="button"
-              className="btn-light btn-full"
-              disabled={loading}
-              onClick={handleCliente}
-            >
-🛒 Cliente
-</button>
-            <button type="button" className="btn-dark btn-full" disabled={loading} onClick={handleDocente}>
-
-            <button
-              type="button"
-              className="btn-dark btn-full"
-              disabled={loading}
-              onClick={handleDocente}
-            >
-🎓 Docente
-</button>
-</div>
-</form>
-
-<div style={{ marginTop: 16, textAlign: 'center' }}>
-          <a href="/empresa" style={{ fontSize: 13, color: '#2563eb' }}>📺 Ver pantalla empresa →</a>
-          <a href="/empresa" style={{ fontSize: 13, color: '#2563eb' }}>
-            📺 Ver pantalla empresa →
+          <button type="submit">Entrar al juego</button>
+          <a className="button light-btn" href="/dashboard">
+            Ver dashboard del profesor
           </a>
-</div>
-</div>
-</main>
-)
+        </form>
+
+        <p className="small">
+          Productos disponibles: {PRODUCTS.join(", ")}. No reemplaza el LEGO; solo digitaliza la información.
+        </p>
+      </section>
+    </main>
+  );
 }
