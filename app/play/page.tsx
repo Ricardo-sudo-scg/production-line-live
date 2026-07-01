@@ -100,7 +100,7 @@ function ProductDiagram({ product, stage }: { product: Product; stage: 'alpha' |
   const canvasStyle = {
     position: 'relative' as const,
     width: 290,
-    height: 360,
+    height: 500,
     margin: '0 auto',
     background: '#f8fafc',
     border: '1px solid #e2e8f0',
@@ -108,123 +108,141 @@ function ProductDiagram({ product, stage }: { product: Product; stage: 'alpha' |
     overflow: 'hidden',
   }
 
+  const receivedBox = (top: number, height: number, label = 'YA VIENE DE ALPHA') => (
+    <>
+      <div style={{ position: 'absolute', left: 40, top, width: 210, height, border: '3px dashed #60a5fa', borderRadius: 12 }} />
+      <div style={{ position: 'absolute', left: 55, top: top - 16, width: 180, textAlign: 'center' }}>
+        <GuideTag tone="base">{label}</GuideTag>
+      </div>
+    </>
+  )
+
   return (
     <div style={canvasStyle}>
-      {/* BICOLOR — ALPHA: arma la base que luego recibirá Beta */}
+      {/* BICOLOR — ALPHA: arma toda la estructura base que Beta recibirá armada */}
       {product === 'Bicolor' && isAlpha && (
         <>
           <div style={{ position: 'absolute', left: 82, top: 10, width: 126, textAlign: 'center' }}>
             <GuideTag tone="add">ARMAR EN ALPHA</GuideTag>
           </div>
 
-          {/* piezas laterales que sirven como guía/soporte del montaje 1 */}
-          <LegoBlock color={LEGO.green} x={28} y={110} w={55} h={120} label="verde 2x1" />
-          <LegoBlock color={LEGO.yellow} x={208} y={110} w={55} h={120} label="amarillo 2x1" />
+          <div style={{ position: 'absolute', left: 42, right: 42, top: 56, fontSize: 12, fontWeight: 800, color: '#475569', textAlign: 'center' }}>
+            Arma esta base completa y pásala a Ensamble 2.
+          </div>
 
-          {/* base central de Alpha: verde 2x2 + rojo 2x2 */}
-          <LegoBlock color={LEGO.green} x={98} y={70} w={94} h={78} label="verde 2x2" />
-          <LegoBlock color={LEGO.red} x={98} y={148} w={94} h={78} label="rojo 2x2" />
+          {/* Estructura base Bicolor: esto luego aparece como "ya viene de Alpha" en Beta */}
+          <LegoBlock color={LEGO.green} x={75} y={120} w={140} h={56} label="verde 2x2" />
+          <div style={{ position: 'absolute', left: 75, top: 176, width: 140, height: 110 }}>
+            <LegoBlock color={LEGO.green} x={0} y={0} w={70} h={110} label="verde 2x1" />
+            <LegoBlock color={LEGO.yellow} x={70} y={0} w={70} h={110} label="amarillo 2x1" />
+          </div>
+          <LegoBlock color={LEGO.red} x={75} y={286} w={140} h={56} label="rojo 2x2" />
 
-          <div style={{ position: 'absolute', left: 36, right: 36, bottom: 18, fontSize: 12, fontWeight: 700, color: '#475569', textAlign: 'center' }}>
-            Entrega esta estructura a Ensamble 2.
+          <div style={{ position: 'absolute', left: 36, right: 36, bottom: 28, fontSize: 12, fontWeight: 700, color: '#475569', textAlign: 'center' }}>
+            Beta solo agregará una pieza arriba y una pieza abajo.
           </div>
         </>
       )}
 
-      {/* BICOLOR — BETA: la estructura central YA viene de Alpha; Beta solo agrega arriba y abajo */}
+      {/* BICOLOR — BETA: recibe la estructura armada; solo agrega arriba y abajo */}
       {product === 'Bicolor' && !isAlpha && (
         <>
           <div style={{ position: 'absolute', left: 82, top: 8, width: 126, textAlign: 'center' }}>
             <GuideTag tone="add">AGREGAR</GuideTag>
           </div>
+          <LegoBlock color={LEGO.yellow} x={75} y={46} w={140} h={52} label="amarillo 2x1" />
 
-          {/* pieza nueva superior */}
-          <LegoBlock color={LEGO.yellow} x={75} y={45} w={140} h={50} label="amarillo 2x1" />
-
-          <div style={{ position: 'absolute', left: 57, top: 112, width: 176, height: 170, border: '3px dashed #60a5fa', borderRadius: 10 }} />
-          <div style={{ position: 'absolute', left: 55, top: 102, width: 180, textAlign: 'center' }}>
-            <GuideTag tone="base">YA VIENE DE ALPHA</GuideTag>
+          {receivedBox(130, 194)}
+          {/* Estructura recibida desde Alpha. Sin etiquetas de tamaño para que Beta no la vuelva a armar. */}
+          <LegoBlock color={LEGO.green} x={75} y={158} w={140} h={52} />
+          <div style={{ position: 'absolute', left: 75, top: 210, width: 140, height: 86 }}>
+            <LegoBlock color={LEGO.green} x={0} y={0} w={70} h={86} />
+            <LegoBlock color={LEGO.yellow} x={70} y={0} w={70} h={86} />
+          </div>
+          <LegoBlock color={LEGO.red} x={75} y={296} w={140} h={52} />
+          <div style={{ position: 'absolute', left: 54, top: 350, width: 182, fontSize: 12, fontWeight: 800, color: '#2563eb', textAlign: 'center' }}>
+            Estructura recibida de Alpha
           </div>
 
-          {/* estructura recibida desde Alpha */}
-          <LegoBlock color={LEGO.green} x={75} y={140} w={140} h={48} label="verde 2x1" />
-          <LegoBlock color={LEGO.green} x={75} y={188} w={70} h={70} label="verde" />
-          <LegoBlock color={LEGO.yellow} x={145} y={188} w={70} h={70} label="amarillo" />
-          <LegoBlock color={LEGO.red} x={75} y={258} w={140} h={48} label="rojo 2x1" />
-
-          <div style={{ position: 'absolute', left: 82, top: 306, width: 126, textAlign: 'center' }}>
+          <div style={{ position: 'absolute', left: 82, top: 374, width: 126, textAlign: 'center' }}>
             <GuideTag tone="add">AGREGAR</GuideTag>
           </div>
-
-          {/* pieza nueva inferior */}
-          <LegoBlock color={LEGO.red} x={75} y={334} w={70} h={48} label="rojo" />
-          <LegoBlock color={LEGO.white} x={145} y={334} w={70} h={48} label="blanco" />
+          <LegoBlock color={LEGO.red} x={75} y={414} w={70} h={52} label="rojo 1x1" />
+          <LegoBlock color={LEGO.white} x={145} y={414} w={70} h={52} label="blanco 1x1" />
         </>
       )}
 
-      {/* AMARILLO — ALPHA */}
+      {/* AMARILLO — ALPHA: arma base amarilla + bloque azul */}
       {product === 'Amarillo' && isAlpha && (
         <>
           <div style={{ position: 'absolute', left: 82, top: 20, width: 126, textAlign: 'center' }}>
             <GuideTag tone="add">ARMAR EN ALPHA</GuideTag>
           </div>
-          <LegoBlock color={LEGO.yellow} x={52} y={210} w={186} h={72} label="base amarilla 4x2" />
-          <LegoBlock color={LEGO.blue} x={99} y={112} w={92} h={92} label="azul 2x2" />
-          <div style={{ position: 'absolute', left: 36, right: 36, bottom: 18, fontSize: 12, fontWeight: 700, color: '#475569', textAlign: 'center' }}>
-            Entrega la base amarilla con el bloque azul.
+          <div style={{ position: 'absolute', left: 42, right: 42, top: 64, fontSize: 12, fontWeight: 800, color: '#475569', textAlign: 'center' }}>
+            Arma la base que recibirá Ensamble 2.
+          </div>
+          <LegoBlock color={LEGO.yellow} x={52} y={260} w={186} h={72} label="base amarilla 4x2" />
+          <LegoBlock color={LEGO.blue} x={99} y={140} w={92} h={92} label="azul 2x2" />
+          <div style={{ position: 'absolute', left: 36, right: 36, bottom: 28, fontSize: 12, fontWeight: 700, color: '#475569', textAlign: 'center' }}>
+            Pásala a Ensamble 2 para que agregue las piezas finales.
           </div>
         </>
       )}
 
-      {/* AMARILLO — BETA: recibe base amarilla + azul; agrega rojo 2x1, verde 1x1 y rojo 1x1 */}
+      {/* AMARILLO — BETA: solo agrega piezas finales; la base ya viene de Alpha */}
       {product === 'Amarillo' && !isAlpha && (
         <>
           <div style={{ position: 'absolute', left: 82, top: 10, width: 126, textAlign: 'center' }}>
             <GuideTag tone="add">AGREGAR</GuideTag>
           </div>
-          <LegoBlock color={LEGO.red} x={42} y={72} w={54} h={110} label="rojo 2x1" />
-          <LegoBlock color={LEGO.green} x={103} y={52} w={48} h={48} label="verde" />
-          <LegoBlock color={LEGO.red} x={160} y={52} w={48} h={48} label="rojo" />
+          <LegoBlock color={LEGO.red} x={42} y={70} w={54} h={112} label="rojo 2x1" />
+          <LegoBlock color={LEGO.green} x={110} y={66} w={52} h={52} label="verde 1x1" />
+          <LegoBlock color={LEGO.red} x={174} y={66} w={52} h={52} label="rojo 1x1" />
 
-          <div style={{ position: 'absolute', left: 43, top: 190, width: 204, height: 126, border: '3px dashed #60a5fa', borderRadius: 10 }} />
-          <div style={{ position: 'absolute', left: 55, top: 180, width: 180, textAlign: 'center' }}>
-            <GuideTag tone="base">YA VIENE DE ALPHA</GuideTag>
+          {receivedBox(232, 130)}
+          {/* Base recibida desde Alpha. Sin etiquetas de piezas para no confundir a Beta. */}
+          <LegoBlock color={LEGO.yellow} x={52} y={300} w={186} h={62} />
+          <LegoBlock color={LEGO.blue} x={99} y={246} w={92} h={72} />
+          <div style={{ position: 'absolute', left: 54, top: 370, width: 182, fontSize: 12, fontWeight: 800, color: '#2563eb', textAlign: 'center' }}>
+            Base recibida de Alpha
           </div>
-          <LegoBlock color={LEGO.yellow} x={52} y={238} w={186} h={62} label="base amarilla 4x2" />
-          <LegoBlock color={LEGO.blue} x={99} y={196} w={92} h={72} label="azul 2x2" />
         </>
       )}
 
-      {/* ROJO — ALPHA */}
+      {/* ROJO — ALPHA: arma base roja + bloque amarillo */}
       {product === 'Rojo' && isAlpha && (
         <>
           <div style={{ position: 'absolute', left: 82, top: 20, width: 126, textAlign: 'center' }}>
             <GuideTag tone="add">ARMAR EN ALPHA</GuideTag>
           </div>
-          <LegoBlock color={LEGO.red} x={52} y={210} w={186} h={72} label="base roja 4x2" />
-          <LegoBlock color={LEGO.yellow} x={99} y={112} w={92} h={92} label="amarillo 2x2" />
-          <div style={{ position: 'absolute', left: 36, right: 36, bottom: 18, fontSize: 12, fontWeight: 700, color: '#475569', textAlign: 'center' }}>
-            Entrega la base roja con el bloque amarillo.
+          <div style={{ position: 'absolute', left: 42, right: 42, top: 64, fontSize: 12, fontWeight: 800, color: '#475569', textAlign: 'center' }}>
+            Arma la base que recibirá Ensamble 2.
+          </div>
+          <LegoBlock color={LEGO.red} x={52} y={260} w={186} h={72} label="base roja 4x2" />
+          <LegoBlock color={LEGO.yellow} x={99} y={140} w={92} h={92} label="amarillo 2x2" />
+          <div style={{ position: 'absolute', left: 36, right: 36, bottom: 28, fontSize: 12, fontWeight: 700, color: '#475569', textAlign: 'center' }}>
+            Pásala a Ensamble 2 para que agregue las piezas finales.
           </div>
         </>
       )}
 
-      {/* ROJO — BETA: recibe base roja + amarillo; agrega verde 2x1, azul 1x1 y verde 1x1 */}
+      {/* ROJO — BETA: solo agrega piezas finales; la base ya viene de Alpha */}
       {product === 'Rojo' && !isAlpha && (
         <>
           <div style={{ position: 'absolute', left: 82, top: 10, width: 126, textAlign: 'center' }}>
             <GuideTag tone="add">AGREGAR</GuideTag>
           </div>
-          <LegoBlock color={LEGO.green} x={58} y={58} w={110} h={52} label="verde 2x1" />
-          <LegoBlock color={LEGO.blue} x={100} y={130} w={48} h={48} label="azul" />
-          <LegoBlock color={LEGO.green} x={158} y={130} w={48} h={48} label="verde" />
+          <LegoBlock color={LEGO.green} x={60} y={64} w={112} h={52} label="verde 2x1" />
+          <LegoBlock color={LEGO.blue} x={102} y={138} w={52} h={52} label="azul 1x1" />
+          <LegoBlock color={LEGO.green} x={166} y={138} w={52} h={52} label="verde 1x1" />
 
-          <div style={{ position: 'absolute', left: 43, top: 190, width: 204, height: 126, border: '3px dashed #60a5fa', borderRadius: 10 }} />
-          <div style={{ position: 'absolute', left: 55, top: 180, width: 180, textAlign: 'center' }}>
-            <GuideTag tone="base">YA VIENE DE ALPHA</GuideTag>
+          {receivedBox(232, 130)}
+          {/* Base recibida desde Alpha. Sin etiquetas de piezas para no confundir a Beta. */}
+          <LegoBlock color={LEGO.red} x={52} y={300} w={186} h={62} />
+          <LegoBlock color={LEGO.yellow} x={99} y={246} w={92} h={72} />
+          <div style={{ position: 'absolute', left: 54, top: 370, width: 182, fontSize: 12, fontWeight: 800, color: '#2563eb', textAlign: 'center' }}>
+            Base recibida de Alpha
           </div>
-          <LegoBlock color={LEGO.red} x={52} y={238} w={186} h={62} label="base roja 4x2" />
-          <LegoBlock color={LEGO.yellow} x={99} y={196} w={92} h={72} label="amarillo 2x2" />
         </>
       )}
     </div>
@@ -237,14 +255,14 @@ function ProductGuide({ product, stage }: { product: Product; stage: 'alpha' | '
   const instructions: Record<Product, { alpha: string[]; beta: string[] }> = {
     Bicolor: {
       alpha: [
-        'Arma la estructura base: verde 2x2 sobre rojo 2x2.',
-        'Usa las piezas verde 2x1 y amarillo 2x1 como parte de la guía del montaje.',
+        'Arma la estructura base completa que recibirá Ensamble 2.',
+        'Incluye: verde 2x2, rojo 2x2, verde 2x1 y amarillo 2x1.',
         'Pasa la pieza a Ensamble 2.',
       ],
       beta: [
-        'Recibe la estructura que ya armó Alpha.',
-        'Agrega arriba la pieza amarilla 2x1.',
-        'Agrega abajo la pieza rojo 1x1 + blanco 1x1.',
+        'Recibe la estructura base ya armada por Alpha.',
+        'No vuelvas a armar la base: solo agrega las piezas marcadas.',
+        'Agrega arriba amarillo 2x1 y abajo rojo 1x1 + blanco 1x1.',
       ],
     },
     Amarillo: {
@@ -254,9 +272,9 @@ function ProductGuide({ product, stage }: { product: Product; stage: 'alpha' | '
         'Pasa la pieza a Ensamble 2.',
       ],
       beta: [
-        'Recibe la base amarilla con el bloque azul.',
-        'Agrega la pieza roja 2x1.',
-        'Agrega la pieza verde 1x1 y la pieza roja 1x1.',
+        'Recibe la base amarilla con el bloque azul ya armados por Alpha.',
+        'No vuelvas a armar la base: solo agrega las piezas marcadas.',
+        'Agrega rojo 2x1, verde 1x1 y rojo 1x1.',
       ],
     },
     Rojo: {
@@ -266,9 +284,9 @@ function ProductGuide({ product, stage }: { product: Product; stage: 'alpha' | '
         'Pasa la pieza a Ensamble 2.',
       ],
       beta: [
-        'Recibe la base roja con el bloque amarillo.',
-        'Agrega la pieza verde 2x1.',
-        'Agrega la pieza azul 1x1 y la pieza verde 1x1.',
+        'Recibe la base roja con el bloque amarillo ya armados por Alpha.',
+        'No vuelvas a armar la base: solo agrega las piezas marcadas.',
+        'Agrega verde 2x1, azul 1x1 y verde 1x1.',
       ],
     },
   }
@@ -384,7 +402,7 @@ export default function PlayPage() {
             <Ensamble2Panel orders={orders} onUpdate={update} />}
           {session.role === 'Ingeniero de Procesos Térmicos' &&
             <HornoPanel orders={orders} batches={batches} session={session} room={room} setMsg={setMsg} />}
-          {session.role === 'Gerente de Logística y Distribución' &&
+          {(session.role === 'Encargado de Almacén' || session.role === 'Gerente de Logística y Distribución') &&
             <AlmacenPanel orders={orders} onUpdate={update} />}
           {session.role === 'Coordinador de Materiales' &&
             <ReciclajePanel orders={orders} />}
@@ -468,7 +486,7 @@ function PlanificadorPanel({ orders, session, onUpdate }: {
       <div className="grid-3">
         <div className="metric"><div className="val">{enProceso.length}</div><div className="lbl">En línea</div></div>
         <div className="metric good"><div className="val">{entregados.length}</div><div className="lbl">Entregados</div></div>
-        <div className="metric bad"><div className="val">{orders.filter(o => o.status === 'no_entregado').length}</div><div className="lbl">Perdidos</div></div>
+        <div className="metric bad"><div className="val">{orders.filter(o => o.status === 'no_entregado').length}</div><div className="lbl">No recibidos</div></div>
       </div>
 
       {pendientes.length > 0 && (
@@ -787,7 +805,7 @@ function AlmacenPanel({ orders, onUpdate }: {
         <div className="grid-3">
           <div className="metric good"><div className="val">{orders.filter(o => o.status === 'entregado_ok').length}</div><div className="lbl">A tiempo</div></div>
           <div className="metric warn"><div className="val">{orders.filter(o => o.status === 'entregado_tarde').length}</div><div className="lbl">Tarde</div></div>
-          <div className="metric bad"><div className="val">{orders.filter(o => o.status === 'no_entregado').length}</div><div className="lbl">Perdidos</div></div>
+          <div className="metric bad"><div className="val">{orders.filter(o => o.status === 'no_entregado').length}</div><div className="lbl">No recibidos</div></div>
         </div>
       </div>
     </div>
