@@ -12,18 +12,22 @@ export function cycleTimeMs(order: Order): number | null {
   return new Date(order.delivered_at).getTime() - new Date(order.requested_at).getTime()
 }
 
-// Tiempo desde el primer pedido hasta la octava entrega
+// Tiempo hasta la salida de los primeros 8 productos terminados al almacén.
+// Línea A necesita 1 lote de 8; Línea B normalmente necesita 2 lotes de 4 para llegar a 8.
 export function timeToFirst8(orders: Order[]): string {
-  const delivered = orders
-    .filter(o => o.status === 'entregado_ok' || o.status === 'entregado_tarde')
-    .sort((a, b) => new Date(a.delivered_at!).getTime() - new Date(b.delivered_at!).getTime())
-  if (delivered.length < 8) return '-'
-  const firstRequest = orders.reduce((min, o) => {
-    const t = new Date(o.requested_at).getTime()
+  const outputs = orders
+    .filter(o => o.almacen_entry || o.horno_exit)
+    .sort((a, b) => new Date(a.almacen_entry || a.horno_exit!).getTime() - new Date(b.almacen_entry || b.horno_exit!).getTime())
+  if (outputs.length < 8) return '-'
+
+  const firstStart = orders.reduce((min, o) => {
+    const raw = o.planificacion_start || o.ensamble1_start || o.requested_at || o.created_at
+    const t = new Date(raw).getTime()
     return t < min ? t : min
   }, Infinity)
-  const eighthDelivery = new Date(delivered[7].delivered_at!).getTime()
-  return formatDuration(eighthDelivery - firstRequest)
+
+  const eighthOutput = new Date(outputs[7].almacen_entry || outputs[7].horno_exit!).getTime()
+  return formatDuration(eighthOutput - firstStart)
 }
 
 // Tiempo desde que el primer lote entró al horno hasta que salió
@@ -37,13 +41,67 @@ export function timeFirstBatch(batches: OvenBatch[]): string {
   )
 }
 
-export function calcMetrics(orders: Order[], batches: OvenBatch[] = []) {
-  const total        = orders.length
-  const ok           = orders.filter(o => o.status === 'entregado_ok').length
-  const tarde        = orders.filter(o => o.status === 'entregado_tarde').length
-  const noEntregado  = orders.filter(o => o.status === 'no_entregado').length
+function productionStartMs(order: Order): number {
+  const raw = order.planificacion_start || order.ensamble1_start || order.requested_at || order.created_at
+  return new Date(raw).getTime()
+}
+
+function outputMs(order: Order): number | null {
+  const raw = order.almacen_entry || order.horno_exit
+  return raw ? new Date(raw).getTime() : null
+}
+
+export type ProductionLotSummary = {
+  lotNumber: number
+  quantity: number
+  startedAt: string
+  finishedAt: string
+  durationMs: number
+  durationLabel: string
+}
+
+// Lotes de salida a almacén. Línea A normalmente agrupa de 8; Línea B normalmente agrupa de 4.
+// No usa el tiempo fijo del horno solamente: mide desde que el lote empezó a producirse hasta que llegó a almacén.
+export function productionLotSummaries(orders: Order[], batchSize = 8): ProductionLotSummary[] {
+  const outputs = orders
+    .filter(o => outputMs(o) !== null)
+    .sort((a, b) => outputMs(a)! - outputMs(b)!)
+
+  const lots: ProductionLotSummary[] = []
+
+  for (let i = 0; i + batchSize <= outputs.length; i += batchSize) {
+    const chunk = outputs.slice(i, i + batchSize)
+    const start = Math.min(...chunk.map(productionStartMs))
+    const finish = Math.max(...chunk.map(o => outputMs(o)!))
+
+    lots.push({
+      lotNumber: lots.length + 1,
+      quantity: batchSize,
+      startedAt: new Date(start).toISOString(),
+      finishedAt: new Date(finish).toISOString(),
+      durationMs: finish - start,
+      durationLabel: formatDuration(finish - start),
+    })
+  }
+
+  return lots
+}
+
+export function averageProductionLotTime(orders: Order[], batchSize = 8): string {
+  const lots = productionLotSummaries(orders, batchSize)
+  if (!lots.length) return '-'
+  const avg = lots.reduce((acc, lot) => acc + lot.durationMs, 0) / lots.length
+  return formatDuration(avg)
+}
+
+export function calcMetrics(orders: Order[], batches: OvenBatch[] = [], batchSize = 8) {
+  const clientOrders = orders.filter(o => o.client_verdict || o.status === 'pendiente')
+  const total        = clientOrders.length
+  const ok           = orders.filter(o => o.client_verdict === 'ok').length
+  const tarde        = orders.filter(o => o.client_verdict === 'tarde').length
+  const noEntregado  = orders.filter(o => o.client_verdict === 'no_entregado').length
   const enLinea      = orders.filter(o =>
-    !['entregado_ok','entregado_tarde','no_entregado','pendiente'].includes(o.status)
+    !['entregado_ok','entregado_tarde','no_entregado','pendiente','stock_consumido'].includes(o.status)
   ).length
   const enHorno      = orders.filter(o => o.status === 'en_horno').length
   const enAlmacen    = orders.filter(o => o.status === 'en_almacen').length
@@ -77,6 +135,8 @@ export function calcMetrics(orders: Order[], batches: OvenBatch[] = []) {
     stationQueues,
     first8:         timeToFirst8(orders),
     firstBatch:     timeFirstBatch(batches),
+    avgLot:         averageProductionLotTime(orders, batchSize),
+    productionLots: productionLotSummaries(orders, batchSize),
     npsAvg,
   }
 }
@@ -111,7 +171,7 @@ export function playerStatus(role: string, orders: Order[], batches: OvenBatch[]
     case 'Encargado de Almacén':
     case 'Gerente de Logística y Distribución': {
       const stock = orders.filter(o => o.status === 'en_almacen').length
-      const delivered = orders.filter(o => ['entregado_ok','entregado_tarde'].includes(o.status)).length
+      const delivered = orders.filter(o => ['ok','tarde'].includes(String(o.client_verdict))).length
       return `${stock} en stock · ${delivered} entregados`
     }
     case 'Jefe de Planificación Estratégica': {
