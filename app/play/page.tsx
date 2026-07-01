@@ -73,74 +73,158 @@ function LegoBlock({
   )
 }
 
-function ProductDiagram({ product, stage }: { product: Product; stage: 'alpha' | 'beta' }) {
-  const isAlpha = stage === 'alpha'
-
+function GuideTag({ children, tone }: { children: string; tone: 'add' | 'base' }) {
   return (
     <div
       style={{
-        position: 'relative',
-        width: 260,
-        height: 220,
-        margin: '0 auto',
-        background: '#f8fafc',
-        border: '1px solid #e2e8f0',
-        borderRadius: 18,
+        display: 'inline-block',
+        margin: '8px auto 8px',
+        padding: '4px 10px',
+        borderRadius: 999,
+        fontSize: 11,
+        fontWeight: 900,
+        letterSpacing: '.02em',
+        color: tone === 'add' ? '#92400e' : '#1d4ed8',
+        background: tone === 'add' ? '#fef3c7' : '#dbeafe',
+        border: tone === 'add' ? '2px solid #f59e0b' : '2px solid #60a5fa',
       }}
     >
-      {/* BICOLOR */}
+      {children}
+    </div>
+  )
+}
+
+function ProductDiagram({ product, stage }: { product: Product; stage: 'alpha' | 'beta' }) {
+  const isAlpha = stage === 'alpha'
+
+  const canvasStyle = {
+    position: 'relative' as const,
+    width: 290,
+    height: 360,
+    margin: '0 auto',
+    background: '#f8fafc',
+    border: '1px solid #e2e8f0',
+    borderRadius: 18,
+    overflow: 'hidden',
+  }
+
+  return (
+    <div style={canvasStyle}>
+      {/* BICOLOR — ALPHA: arma la base que luego recibirá Beta */}
       {product === 'Bicolor' && isAlpha && (
         <>
-          <LegoBlock color={LEGO.green} x={50} y={54} w={50} h={120} label="verde 2x1" />
-          <LegoBlock color={LEGO.green} x={112} y={36} w={90} h={70} label="verde" />
-          <LegoBlock color={LEGO.red} x={112} y={106} w={90} h={70} label="rojo" />
-          <LegoBlock color={LEGO.yellow} x={212} y={54} w={38} h={120} label="amarillo" />
+          <div style={{ position: 'absolute', left: 82, top: 10, width: 126, textAlign: 'center' }}>
+            <GuideTag tone="add">ARMAR EN ALPHA</GuideTag>
+          </div>
+
+          {/* piezas laterales que sirven como guía/soporte del montaje 1 */}
+          <LegoBlock color={LEGO.green} x={28} y={110} w={55} h={120} label="verde 2x1" />
+          <LegoBlock color={LEGO.yellow} x={208} y={110} w={55} h={120} label="amarillo 2x1" />
+
+          {/* base central de Alpha: verde 2x2 + rojo 2x2 */}
+          <LegoBlock color={LEGO.green} x={98} y={70} w={94} h={78} label="verde 2x2" />
+          <LegoBlock color={LEGO.red} x={98} y={148} w={94} h={78} label="rojo 2x2" />
+
+          <div style={{ position: 'absolute', left: 36, right: 36, bottom: 18, fontSize: 12, fontWeight: 700, color: '#475569', textAlign: 'center' }}>
+            Entrega esta estructura a Ensamble 2.
+          </div>
         </>
       )}
 
+      {/* BICOLOR — BETA: la estructura central YA viene de Alpha; Beta solo agrega arriba y abajo */}
       {product === 'Bicolor' && !isAlpha && (
         <>
-          <LegoBlock color={LEGO.yellow} x={72} y={18} w={116} h={46} label="amarillo 2x1" />
-          <LegoBlock color={LEGO.green} x={72} y={82} w={116} h={50} label="verde" />
-          <LegoBlock color={LEGO.green} x={72} y={132} w={58} h={52} />
-          <LegoBlock color={LEGO.yellow} x={130} y={132} w={58} h={52} />
-          <LegoBlock color={LEGO.red} x={72} y={184} w={116} h={34} label="rojo" />
+          <div style={{ position: 'absolute', left: 82, top: 8, width: 126, textAlign: 'center' }}>
+            <GuideTag tone="add">AGREGAR</GuideTag>
+          </div>
+
+          {/* pieza nueva superior */}
+          <LegoBlock color={LEGO.yellow} x={75} y={45} w={140} h={50} label="amarillo 2x1" />
+
+          <div style={{ position: 'absolute', left: 57, top: 112, width: 176, height: 170, border: '3px dashed #60a5fa', borderRadius: 10 }} />
+          <div style={{ position: 'absolute', left: 55, top: 102, width: 180, textAlign: 'center' }}>
+            <GuideTag tone="base">YA VIENE DE ALPHA</GuideTag>
+          </div>
+
+          {/* estructura recibida desde Alpha */}
+          <LegoBlock color={LEGO.green} x={75} y={140} w={140} h={48} label="verde 2x1" />
+          <LegoBlock color={LEGO.green} x={75} y={188} w={70} h={70} label="verde" />
+          <LegoBlock color={LEGO.yellow} x={145} y={188} w={70} h={70} label="amarillo" />
+          <LegoBlock color={LEGO.red} x={75} y={258} w={140} h={48} label="rojo 2x1" />
+
+          <div style={{ position: 'absolute', left: 82, top: 306, width: 126, textAlign: 'center' }}>
+            <GuideTag tone="add">AGREGAR</GuideTag>
+          </div>
+
+          {/* pieza nueva inferior */}
+          <LegoBlock color={LEGO.red} x={75} y={334} w={70} h={48} label="rojo" />
+          <LegoBlock color={LEGO.white} x={145} y={334} w={70} h={48} label="blanco" />
         </>
       )}
 
-      {/* AMARILLO */}
+      {/* AMARILLO — ALPHA */}
       {product === 'Amarillo' && isAlpha && (
         <>
-          <LegoBlock color={LEGO.yellow} x={52} y={112} w={156} h={72} label="base amarilla 4x2" />
-          <LegoBlock color={LEGO.blue} x={91} y={56} w={78} h={72} label="azul 2x2" />
+          <div style={{ position: 'absolute', left: 82, top: 20, width: 126, textAlign: 'center' }}>
+            <GuideTag tone="add">ARMAR EN ALPHA</GuideTag>
+          </div>
+          <LegoBlock color={LEGO.yellow} x={52} y={210} w={186} h={72} label="base amarilla 4x2" />
+          <LegoBlock color={LEGO.blue} x={99} y={112} w={92} h={92} label="azul 2x2" />
+          <div style={{ position: 'absolute', left: 36, right: 36, bottom: 18, fontSize: 12, fontWeight: 700, color: '#475569', textAlign: 'center' }}>
+            Entrega la base amarilla con el bloque azul.
+          </div>
         </>
       )}
 
+      {/* AMARILLO — BETA: recibe base amarilla + azul; agrega rojo 2x1, verde 1x1 y rojo 1x1 */}
       {product === 'Amarillo' && !isAlpha && (
         <>
-          <LegoBlock color={LEGO.yellow} x={52} y={116} w={156} h={68} label="base" />
-          <LegoBlock color={LEGO.blue} x={91} y={60} w={78} h={68} label="azul 2x2" />
-          <LegoBlock color={LEGO.red} x={42} y={64} w={42} h={96} label="rojo 2x1" />
-          <LegoBlock color={LEGO.green} x={92} y={28} w={38} h={38} label="verde" />
-          <LegoBlock color={LEGO.red} x={140} y={28} w={38} h={38} label="rojo" />
+          <div style={{ position: 'absolute', left: 82, top: 10, width: 126, textAlign: 'center' }}>
+            <GuideTag tone="add">AGREGAR</GuideTag>
+          </div>
+          <LegoBlock color={LEGO.red} x={42} y={72} w={54} h={110} label="rojo 2x1" />
+          <LegoBlock color={LEGO.green} x={103} y={52} w={48} h={48} label="verde" />
+          <LegoBlock color={LEGO.red} x={160} y={52} w={48} h={48} label="rojo" />
+
+          <div style={{ position: 'absolute', left: 43, top: 190, width: 204, height: 126, border: '3px dashed #60a5fa', borderRadius: 10 }} />
+          <div style={{ position: 'absolute', left: 55, top: 180, width: 180, textAlign: 'center' }}>
+            <GuideTag tone="base">YA VIENE DE ALPHA</GuideTag>
+          </div>
+          <LegoBlock color={LEGO.yellow} x={52} y={238} w={186} h={62} label="base amarilla 4x2" />
+          <LegoBlock color={LEGO.blue} x={99} y={196} w={92} h={72} label="azul 2x2" />
         </>
       )}
 
-      {/* ROJO */}
+      {/* ROJO — ALPHA */}
       {product === 'Rojo' && isAlpha && (
         <>
-          <LegoBlock color={LEGO.red} x={52} y={112} w={156} h={72} label="base roja 4x2" />
-          <LegoBlock color={LEGO.yellow} x={91} y={56} w={78} h={72} label="amarillo 2x2" />
+          <div style={{ position: 'absolute', left: 82, top: 20, width: 126, textAlign: 'center' }}>
+            <GuideTag tone="add">ARMAR EN ALPHA</GuideTag>
+          </div>
+          <LegoBlock color={LEGO.red} x={52} y={210} w={186} h={72} label="base roja 4x2" />
+          <LegoBlock color={LEGO.yellow} x={99} y={112} w={92} h={92} label="amarillo 2x2" />
+          <div style={{ position: 'absolute', left: 36, right: 36, bottom: 18, fontSize: 12, fontWeight: 700, color: '#475569', textAlign: 'center' }}>
+            Entrega la base roja con el bloque amarillo.
+          </div>
         </>
       )}
 
+      {/* ROJO — BETA: recibe base roja + amarillo; agrega verde 2x1, azul 1x1 y verde 1x1 */}
       {product === 'Rojo' && !isAlpha && (
         <>
-          <LegoBlock color={LEGO.red} x={52} y={116} w={156} h={68} label="base" />
-          <LegoBlock color={LEGO.yellow} x={91} y={60} w={78} h={68} label="amarillo 2x2" />
-          <LegoBlock color={LEGO.green} x={52} y={28} w={78} h={42} label="verde 2x1" />
-          <LegoBlock color={LEGO.blue} x={92} y={154} w={38} h={38} label="azul" />
-          <LegoBlock color={LEGO.green} x={140} y={154} w={38} h={38} label="verde" />
+          <div style={{ position: 'absolute', left: 82, top: 10, width: 126, textAlign: 'center' }}>
+            <GuideTag tone="add">AGREGAR</GuideTag>
+          </div>
+          <LegoBlock color={LEGO.green} x={58} y={58} w={110} h={52} label="verde 2x1" />
+          <LegoBlock color={LEGO.blue} x={100} y={130} w={48} h={48} label="azul" />
+          <LegoBlock color={LEGO.green} x={158} y={130} w={48} h={48} label="verde" />
+
+          <div style={{ position: 'absolute', left: 43, top: 190, width: 204, height: 126, border: '3px dashed #60a5fa', borderRadius: 10 }} />
+          <div style={{ position: 'absolute', left: 55, top: 180, width: 180, textAlign: 'center' }}>
+            <GuideTag tone="base">YA VIENE DE ALPHA</GuideTag>
+          </div>
+          <LegoBlock color={LEGO.red} x={52} y={238} w={186} h={62} label="base roja 4x2" />
+          <LegoBlock color={LEGO.yellow} x={99} y={196} w={92} h={72} label="amarillo 2x2" />
         </>
       )}
     </div>
@@ -152,16 +236,40 @@ function ProductGuide({ product, stage }: { product: Product; stage: 'alpha' | '
 
   const instructions: Record<Product, { alpha: string[]; beta: string[] }> = {
     Bicolor: {
-      alpha: ['Prepara la base bicolor principal.', 'Arma la primera mitad y pásala al siguiente técnico.'],
-      beta: ['Completa la pieza bicolor con las piezas superiores/finales.', 'Cuando esté lista, envíala al horno.'],
+      alpha: [
+        'Arma la estructura base: verde 2x2 sobre rojo 2x2.',
+        'Usa las piezas verde 2x1 y amarillo 2x1 como parte de la guía del montaje.',
+        'Pasa la pieza a Ensamble 2.',
+      ],
+      beta: [
+        'Recibe la estructura que ya armó Alpha.',
+        'Agrega arriba la pieza amarilla 2x1.',
+        'Agrega abajo la pieza rojo 1x1 + blanco 1x1.',
+      ],
     },
     Amarillo: {
-      alpha: ['Coloca la base amarilla 4x2.', 'Coloca el bloque azul 2x2 en el centro.'],
-      beta: ['Agrega la pieza roja 2x1.', 'Agrega la pieza verde 1x1 y la pieza roja 1x1.'],
+      alpha: [
+        'Coloca la base amarilla 4x2.',
+        'Coloca el bloque azul 2x2 al centro.',
+        'Pasa la pieza a Ensamble 2.',
+      ],
+      beta: [
+        'Recibe la base amarilla con el bloque azul.',
+        'Agrega la pieza roja 2x1.',
+        'Agrega la pieza verde 1x1 y la pieza roja 1x1.',
+      ],
     },
     Rojo: {
-      alpha: ['Coloca la base roja 4x2.', 'Coloca el bloque amarillo 2x2 en el centro.'],
-      beta: ['Agrega la pieza verde 2x1.', 'Agrega la pieza azul 1x1 y la pieza verde 1x1.'],
+      alpha: [
+        'Coloca la base roja 4x2.',
+        'Coloca el bloque amarillo 2x2 al centro.',
+        'Pasa la pieza a Ensamble 2.',
+      ],
+      beta: [
+        'Recibe la base roja con el bloque amarillo.',
+        'Agrega la pieza verde 2x1.',
+        'Agrega la pieza azul 1x1 y la pieza verde 1x1.',
+      ],
     },
   }
 
@@ -169,7 +277,7 @@ function ProductGuide({ product, stage }: { product: Product; stage: 'alpha' | '
     <div className="card" style={{ textAlign: 'center', padding: 16 }}>
       <h3 style={{ marginBottom: 8 }}>{title} — Pieza {product}</h3>
       <p className="small" style={{ marginBottom: 12 }}>
-        Mira la guía, arma la pieza física y pásala a la siguiente estación.
+        Mira la guía, arma solo tu parte y pásala a la siguiente estación.
       </p>
 
       <ProductDiagram product={product} stage={stage} />
