@@ -13,7 +13,8 @@ export type Role =
   | 'Técnico de Fabricación Alpha'
   | 'Técnico de Fabricación Beta'
   | 'Ingeniero de Procesos Térmicos'
-  | 'Gerente de Logística y Distribución'
+  | 'Encargado de Almacén'
+  | 'Gerente de Logística y Distribución' // legado: por si quedó guardado en algún celular
   | 'Coordinador de Materiales'
   | 'Docente'
 
@@ -100,9 +101,9 @@ export const PRODUCT_COLOR: Record<Product, string> = {
 }
 
 export const PRODUCT_LABEL: Record<Product, string> = {
-  Bicolor:  'Bc',
-  Amarillo: 'Am',
-  Rojo:     'R',
+  Bicolor:  'Bicolor',
+  Amarillo: 'Amarillo',
+  Rojo:     'Rojo',
 }
 
 export const COMPANY_ROLES: Role[] = [
@@ -110,7 +111,7 @@ export const COMPANY_ROLES: Role[] = [
   'Técnico de Fabricación Alpha',
   'Técnico de Fabricación Beta',
   'Ingeniero de Procesos Térmicos',
-  'Gerente de Logística y Distribución',
+  'Encargado de Almacén',
   'Coordinador de Materiales',
 ]
 
