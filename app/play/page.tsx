@@ -10,8 +10,179 @@ import {
 
 function ProductPill({ p }: { p: string }) {
   const map: Record<string, string> = { Bicolor: 'pill-bc', Amarillo: 'pill-am', Rojo: 'pill-r' }
-  const short: Record<string, string> = { Bicolor: 'Bc', Amarillo: 'Am', Rojo: 'R' }
-  return <span className={map[p] || ''}>{short[p] || p}</span>
+  const label: Record<string, string> = { Bicolor: 'Bicolor', Amarillo: 'Amarillo', Rojo: 'Rojo' }
+  return <span className={map[p] || ''}>{label[p] || p}</span>
+}
+
+const LEGO = {
+  red: '#ef4444',
+  green: '#84cc16',
+  yellow: '#fde047',
+  blue: '#0ea5e9',
+  white: '#ffffff',
+  border: '#111827',
+}
+
+function LegoBlock({
+  color,
+  x,
+  y,
+  w,
+  h,
+  label,
+}: {
+  color: string
+  x: number
+  y: number
+  w: number
+  h: number
+  label?: string
+}) {
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        left: x,
+        top: y,
+        width: w,
+        height: h,
+        background: color,
+        border: `2px solid ${LEGO.border}`,
+        borderRadius: 3,
+        boxShadow: '0 2px 0 rgba(15,23,42,.18)',
+      }}
+    >
+      {label && (
+        <span
+          style={{
+            position: 'absolute',
+            left: 4,
+            top: 3,
+            fontSize: 10,
+            fontWeight: 900,
+            color: '#111827',
+            background: 'rgba(255,255,255,.75)',
+            padding: '1px 4px',
+            borderRadius: 999,
+          }}
+        >
+          {label}
+        </span>
+      )}
+    </div>
+  )
+}
+
+function ProductDiagram({ product, stage }: { product: Product; stage: 'alpha' | 'beta' }) {
+  const isAlpha = stage === 'alpha'
+
+  return (
+    <div
+      style={{
+        position: 'relative',
+        width: 260,
+        height: 220,
+        margin: '0 auto',
+        background: '#f8fafc',
+        border: '1px solid #e2e8f0',
+        borderRadius: 18,
+      }}
+    >
+      {/* BICOLOR */}
+      {product === 'Bicolor' && isAlpha && (
+        <>
+          <LegoBlock color={LEGO.green} x={50} y={54} w={50} h={120} label="verde 2x1" />
+          <LegoBlock color={LEGO.green} x={112} y={36} w={90} h={70} label="verde" />
+          <LegoBlock color={LEGO.red} x={112} y={106} w={90} h={70} label="rojo" />
+          <LegoBlock color={LEGO.yellow} x={212} y={54} w={38} h={120} label="amarillo" />
+        </>
+      )}
+
+      {product === 'Bicolor' && !isAlpha && (
+        <>
+          <LegoBlock color={LEGO.yellow} x={72} y={18} w={116} h={46} label="amarillo 2x1" />
+          <LegoBlock color={LEGO.green} x={72} y={82} w={116} h={50} label="verde" />
+          <LegoBlock color={LEGO.green} x={72} y={132} w={58} h={52} />
+          <LegoBlock color={LEGO.yellow} x={130} y={132} w={58} h={52} />
+          <LegoBlock color={LEGO.red} x={72} y={184} w={116} h={34} label="rojo" />
+        </>
+      )}
+
+      {/* AMARILLO */}
+      {product === 'Amarillo' && isAlpha && (
+        <>
+          <LegoBlock color={LEGO.yellow} x={52} y={112} w={156} h={72} label="base amarilla 4x2" />
+          <LegoBlock color={LEGO.blue} x={91} y={56} w={78} h={72} label="azul 2x2" />
+        </>
+      )}
+
+      {product === 'Amarillo' && !isAlpha && (
+        <>
+          <LegoBlock color={LEGO.yellow} x={52} y={116} w={156} h={68} label="base" />
+          <LegoBlock color={LEGO.blue} x={91} y={60} w={78} h={68} label="azul 2x2" />
+          <LegoBlock color={LEGO.red} x={42} y={64} w={42} h={96} label="rojo 2x1" />
+          <LegoBlock color={LEGO.green} x={92} y={28} w={38} h={38} label="verde" />
+          <LegoBlock color={LEGO.red} x={140} y={28} w={38} h={38} label="rojo" />
+        </>
+      )}
+
+      {/* ROJO */}
+      {product === 'Rojo' && isAlpha && (
+        <>
+          <LegoBlock color={LEGO.red} x={52} y={112} w={156} h={72} label="base roja 4x2" />
+          <LegoBlock color={LEGO.yellow} x={91} y={56} w={78} h={72} label="amarillo 2x2" />
+        </>
+      )}
+
+      {product === 'Rojo' && !isAlpha && (
+        <>
+          <LegoBlock color={LEGO.red} x={52} y={116} w={156} h={68} label="base" />
+          <LegoBlock color={LEGO.yellow} x={91} y={60} w={78} h={68} label="amarillo 2x2" />
+          <LegoBlock color={LEGO.green} x={52} y={28} w={78} h={42} label="verde 2x1" />
+          <LegoBlock color={LEGO.blue} x={92} y={154} w={38} h={38} label="azul" />
+          <LegoBlock color={LEGO.green} x={140} y={154} w={38} h={38} label="verde" />
+        </>
+      )}
+    </div>
+  )
+}
+
+function ProductGuide({ product, stage }: { product: Product; stage: 'alpha' | 'beta' }) {
+  const title = stage === 'alpha' ? 'Montaje 1' : 'Montaje 2'
+
+  const instructions: Record<Product, { alpha: string[]; beta: string[] }> = {
+    Bicolor: {
+      alpha: ['Prepara la base bicolor principal.', 'Arma la primera mitad y pásala al siguiente técnico.'],
+      beta: ['Completa la pieza bicolor con las piezas superiores/finales.', 'Cuando esté lista, envíala al horno.'],
+    },
+    Amarillo: {
+      alpha: ['Coloca la base amarilla 4x2.', 'Coloca el bloque azul 2x2 en el centro.'],
+      beta: ['Agrega la pieza roja 2x1.', 'Agrega la pieza verde 1x1 y la pieza roja 1x1.'],
+    },
+    Rojo: {
+      alpha: ['Coloca la base roja 4x2.', 'Coloca el bloque amarillo 2x2 en el centro.'],
+      beta: ['Agrega la pieza verde 2x1.', 'Agrega la pieza azul 1x1 y la pieza verde 1x1.'],
+    },
+  }
+
+  return (
+    <div className="card" style={{ textAlign: 'center', padding: 16 }}>
+      <h3 style={{ marginBottom: 8 }}>{title} — Pieza {product}</h3>
+      <p className="small" style={{ marginBottom: 12 }}>
+        Mira la guía, arma la pieza física y pásala a la siguiente estación.
+      </p>
+
+      <ProductDiagram product={product} stage={stage} />
+
+      <div style={{ marginTop: 12, textAlign: 'left' }}>
+        {instructions[product][stage].map((item, index) => (
+          <p key={item} className="small" style={{ margin: '4px 0' }}>
+            <strong>{index + 1}.</strong> {item}
+          </p>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 export default function PlayPage() {
@@ -208,79 +379,117 @@ function PlanificadorPanel({ orders, session, onUpdate }: {
 function Ensamble1Panel({ orders, onUpdate }: {
   orders: Order[], onUpdate: (id: string, d: Partial<Order>) => void,
 }) {
-  const disponibles = orders.filter(o => o.status === 'en_planificacion' || o.status === 'ensamble1')
+  const disponibles = orders
+    .filter(o => o.status === 'en_planificacion' || o.status === 'ensamble1')
+    .sort((a, b) => a.sequence_number - b.sequence_number)
+
+  // Aunque el planificador mande un lote de 8, el técnico recibe SOLO 1 unidad a la vez.
+  const actual = disponibles[0]
+  const cola = actual ? disponibles.filter(o => o.id !== actual.id) : []
+
   return (
     <div className="grid">
       <div className="alert alert-info">
-        Arma la <strong>primera parte</strong> del producto con LEGO y registra aquí.
+        Arma la <strong>primera parte</strong> con LEGO. Cuando la pases físicamente, registra la transferencia.
       </div>
-      {disponibles.length === 0 && (
-        <div className="card text-center"><p>Esperando pedidos del Planificador...</p></div>
+
+      {!actual && (
+        <div className="card text-center"><p>Esperando pedido del Planificador...</p></div>
       )}
-      {disponibles.map(o => (
-        <div key={o.id} className={`order-card ${o.status === 'ensamble1' ? 'urgent' : ''}`}>
-          <div className="order-row">
-            <div style={{ fontSize: 16, fontWeight: 700 }}>
-              #{o.sequence_number} <ProductPill p={o.product} />
+
+      {actual && (
+        <>
+          <ProductGuide product={actual.product} stage="alpha" />
+
+          <div className="order-card urgent">
+            <div className="order-row">
+              <div style={{ fontSize: 16, fontWeight: 700 }}>
+                #{actual.sequence_number} <ProductPill p={actual.product} />
+              </div>
+              <span className="status">Unidad actual</span>
             </div>
-            <span className="status">{ORDER_STATUS_LABEL[o.status]}</span>
+
+            <button className="btn-full btn-success" onClick={() => {
+              const now = new Date().toISOString()
+              onUpdate(actual.id, {
+                status: 'ensamble1_listo',
+                ensamble1_start: now,
+                ensamble1_end: now,
+              })
+            }}>
+              Enviar a Ensamble 2
+            </button>
           </div>
-          {o.status === 'en_planificacion' && (
-            <button className="btn-full" onClick={() =>
-              onUpdate(o.id, { status: 'ensamble1', ensamble1_start: new Date().toISOString() })}>
-              ▶ Iniciar armado
-            </button>
+
+          {cola.length > 0 && (
+            <div className="notice">
+              Hay <strong>{cola.length}</strong> unidad(es) esperando. Cuando envíes esta, aparecerá la siguiente.
+            </div>
           )}
-          {o.status === 'ensamble1' && (
-            <button className="btn-full btn-success" onClick={() =>
-              onUpdate(o.id, { status: 'ensamble1_listo', ensamble1_end: new Date().toISOString() })}>
-              ✓ Listo — Enviar a Ensamble 2
-            </button>
-          )}
-        </div>
-      ))}
+        </>
+      )}
     </div>
   )
 }
+
 
 // ─── ENSAMBLE 2 ──────────────────────────────────────────────────────────────
 function Ensamble2Panel({ orders, onUpdate }: {
   orders: Order[], onUpdate: (id: string, d: Partial<Order>) => void,
 }) {
-  const disponibles = orders.filter(o => o.status === 'ensamble1_listo' || o.status === 'ensamble2')
+  const disponibles = orders
+    .filter(o => o.status === 'ensamble1_listo' || o.status === 'ensamble2')
+    .sort((a, b) => a.sequence_number - b.sequence_number)
+
+  // También recibe una sola unidad a la vez para evitar confusión.
+  const actual = disponibles[0]
+  const cola = actual ? disponibles.filter(o => o.id !== actual.id) : []
+
   return (
     <div className="grid">
       <div className="alert alert-info">
-        Recibe de Ensamble 1 y completa la <strong>segunda parte</strong> del armado.
+        Completa la <strong>segunda parte</strong>. Cuando la pases físicamente, registra la transferencia.
       </div>
-      {disponibles.length === 0 && (
-        <div className="card text-center"><p>Esperando productos de Ensamble 1...</p></div>
+
+      {!actual && (
+        <div className="card text-center"><p>Esperando producto de Ensamble 1...</p></div>
       )}
-      {disponibles.map(o => (
-        <div key={o.id} className={`order-card ${o.status === 'ensamble2' ? 'urgent' : ''}`}>
-          <div className="order-row">
-            <div style={{ fontSize: 16, fontWeight: 700 }}>
-              #{o.sequence_number} <ProductPill p={o.product} />
+
+      {actual && (
+        <>
+          <ProductGuide product={actual.product} stage="beta" />
+
+          <div className="order-card urgent">
+            <div className="order-row">
+              <div style={{ fontSize: 16, fontWeight: 700 }}>
+                #{actual.sequence_number} <ProductPill p={actual.product} />
+              </div>
+              <span className="status">Unidad actual</span>
             </div>
-            <span className="status">{ORDER_STATUS_LABEL[o.status]}</span>
+
+            <button className="btn-full btn-success" onClick={() => {
+              const now = new Date().toISOString()
+              onUpdate(actual.id, {
+                status: 'ensamble2_listo',
+                ensamble2_start: now,
+                ensamble2_end: now,
+              })
+            }}>
+              Enviar al Horno
+            </button>
           </div>
-          {o.status === 'ensamble1_listo' && (
-            <button className="btn-full" onClick={() =>
-              onUpdate(o.id, { status: 'ensamble2', ensamble2_start: new Date().toISOString() })}>
-              ▶ Iniciar segunda parte
-            </button>
+
+          {cola.length > 0 && (
+            <div className="notice">
+              Hay <strong>{cola.length}</strong> unidad(es) esperando. Cuando envíes esta, aparecerá la siguiente.
+            </div>
           )}
-          {o.status === 'ensamble2' && (
-            <button className="btn-full btn-success" onClick={() =>
-              onUpdate(o.id, { status: 'ensamble2_listo', ensamble2_end: new Date().toISOString() })}>
-              ✓ Listo — Enviar al Horno
-            </button>
-          )}
-        </div>
-      ))}
+        </>
+      )}
     </div>
   )
 }
+
 
 // ─── HORNO ───────────────────────────────────────────────────────────────────
 function HornoPanel({ orders, batches, session, room, setMsg }: {
