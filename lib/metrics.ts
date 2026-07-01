@@ -108,6 +108,7 @@ export function playerStatus(role: string, orders: Order[], batches: OvenBatch[]
       const waiting = orders.filter(o => ['ensamble2_listo','esperando_horno'].includes(o.status)).length
       return waiting > 0 ? `${waiting} esperando entrar` : 'Horno vacío'
     }
+    case 'Encargado de Almacén':
     case 'Gerente de Logística y Distribución': {
       const stock = orders.filter(o => o.status === 'en_almacen').length
       const delivered = orders.filter(o => ['entregado_ok','entregado_tarde'].includes(o.status)).length
