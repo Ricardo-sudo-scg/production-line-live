@@ -139,7 +139,7 @@ function ProductDiagram({ product, stage }: { product: Product; stage: 'alpha' |
           <LegoBlock color={LEGO.red} x={75} y={286} w={140} h={56} label="rojo 2x2" />
 
           <div style={{ position: 'absolute', left: 36, right: 36, bottom: 28, fontSize: 12, fontWeight: 700, color: '#475569', textAlign: 'center' }}>
-            Beta solo agregará una pieza arriba y una pieza abajo.
+            Cuando termines, pásala a Ensamble 2.
           </div>
         </>
       )}
@@ -184,7 +184,7 @@ function ProductDiagram({ product, stage }: { product: Product; stage: 'alpha' |
           <LegoBlock color={LEGO.yellow} x={52} y={260} w={186} h={72} label="base amarilla 4x2" />
           <LegoBlock color={LEGO.blue} x={99} y={140} w={92} h={92} label="azul 2x2" />
           <div style={{ position: 'absolute', left: 36, right: 36, bottom: 28, fontSize: 12, fontWeight: 700, color: '#475569', textAlign: 'center' }}>
-            Pásala a Ensamble 2 para que agregue las piezas finales.
+            Cuando termines, pásala a Ensamble 2.
           </div>
         </>
       )}
@@ -221,7 +221,7 @@ function ProductDiagram({ product, stage }: { product: Product; stage: 'alpha' |
           <LegoBlock color={LEGO.red} x={52} y={260} w={186} h={72} label="base roja 4x2" />
           <LegoBlock color={LEGO.yellow} x={99} y={140} w={92} h={92} label="amarillo 2x2" />
           <div style={{ position: 'absolute', left: 36, right: 36, bottom: 28, fontSize: 12, fontWeight: 700, color: '#475569', textAlign: 'center' }}>
-            Pásala a Ensamble 2 para que agregue las piezas finales.
+            Cuando termines, pásala a Ensamble 2.
           </div>
         </>
       )}
