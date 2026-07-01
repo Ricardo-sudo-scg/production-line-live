@@ -87,8 +87,10 @@ export default function DocentePage() {
     load(roomId)
   }
 
-  const mA      = calcMetrics(ordersA, batchesA)
-  const mB      = calcMetrics(ordersB, batchesB)
+  const batchSizeA = room?.oven_a_batch || 8
+  const batchSizeB = room?.oven_b_batch || 4
+  const mA      = calcMetrics(ordersA, batchesA, batchSizeA)
+  const mB      = calcMetrics(ordersB, batchesB, batchSizeB)
   const ovenDur = room?.oven_duration_sec || 80
 
   // Timers del horno en tiempo real
@@ -152,8 +154,8 @@ export default function DocentePage() {
       {tab === 'dashboard' && (
         <div className="grid">
           <div className="grid-2">
-            <LineCard label="Línea A" color="#2563eb" metrics={mA} />
-            <LineCard label="Línea B" color="#16a34a" metrics={mB} />
+            <LineCard label="Línea A" color="#2563eb" metrics={mA} batchSize={batchSizeA} />
+            <LineCard label="Línea B" color="#16a34a" metrics={mB} batchSize={batchSizeB} />
           </div>
           <div className="card">
             <h2>Últimos pedidos — Línea A</h2>
@@ -289,6 +291,7 @@ export default function DocentePage() {
               { label: 'Tiempo promedio',     a: mA.avgCycleLabel,      b: mB.avgCycleLabel      },
               { label: 'Primeras 8 entregas', a: mA.first8,             b: mB.first8             },
               { label: 'Primer lote',         a: mA.firstBatch,         b: mB.firstBatch         },
+              { label: 'Promedio por lote',   a: mA.avgLot,             b: mB.avgLot             },
               { label: 'Satisfacción (NPS)',  a: mA.npsAvg + '/2',      b: mB.npsAvg + '/2'      },
               { label: 'Cuello de botella',   a: mA.bottleneck,         b: mB.bottleneck         },
             ].map(row => (
@@ -316,8 +319,8 @@ export default function DocentePage() {
 
 // ─── SUB-COMPONENTES ──────────────────────────────────────────────────────────
 
-function LineCard({ label, color, metrics: m }: {
-  label: string, color: string, metrics: ReturnType<typeof calcMetrics>,
+function LineCard({ label, color, metrics: m, batchSize }: {
+  label: string, color: string, metrics: ReturnType<typeof calcMetrics>, batchSize: number,
 }) {
   return (
     <div className="card">
@@ -332,12 +335,29 @@ function LineCard({ label, color, metrics: m }: {
         <div className="metric"><div className="val">{m.total}</div><div className="lbl">Pedidos</div></div>
         <div className="metric"><div className="val">{m.first8}</div><div className="lbl">Primeras 8</div></div>
         <div className="metric"><div className="val">{m.firstBatch}</div><div className="lbl">Primer lote</div></div>
+        <div className="metric"><div className="val">{m.avgLot}</div><div className="lbl">Prom. lote {batchSize}</div></div>
+        <div className="metric"><div className="val">{m.productionLots.length}</div><div className="lbl">Lotes salidos</div></div>
+        <div className="metric"><div className="val">{m.enAlmacen}</div><div className="lbl">Stock</div></div>
       </div>
       {m.bottleneck !== '-' && (
         <div className="alert alert-warn mt-8" style={{ fontSize: 12 }}>
           ⚠ Cuello de botella: <strong>{m.bottleneck}</strong>
         </div>
       )}
+      {m.productionLots.length > 0 && (
+        <div className="card" style={{ marginTop: 10, padding: 10, background: '#f8fafc' }}>
+          <div style={{ fontSize: 12, fontWeight: 800, marginBottom: 6 }}>Salidas de lotes</div>
+          <div className="grid" style={{ gap: 6 }}>
+            {m.productionLots.slice(-5).map((lot) => (
+              <div key={lot.lotNumber} className="flex-between" style={{ fontSize: 12 }}>
+                <span>Lote {lot.lotNumber} · {lot.quantity} productos</span>
+                <strong>{lot.durationLabel}</strong>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }
