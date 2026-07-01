@@ -138,9 +138,6 @@ function ProductDiagram({ product, stage }: { product: Product; stage: 'alpha' |
           </div>
           <LegoBlock color={LEGO.red} x={75} y={286} w={140} h={56} label="rojo 2x2" />
 
-          <div style={{ position: 'absolute', left: 36, right: 36, bottom: 28, fontSize: 12, fontWeight: 700, color: '#475569', textAlign: 'center' }}>
-            Cuando termines, pásala a Ensamble 2.
-          </div>
         </>
       )}
 
@@ -179,13 +176,10 @@ function ProductDiagram({ product, stage }: { product: Product; stage: 'alpha' |
             <GuideTag tone="add">ARMAR EN ALPHA</GuideTag>
           </div>
           <div style={{ position: 'absolute', left: 42, right: 42, top: 64, fontSize: 12, fontWeight: 800, color: '#475569', textAlign: 'center' }}>
-            Arma la base que recibirá Ensamble 2.
+            Arma esta base completa y pásala a Ensamble 2.
           </div>
           <LegoBlock color={LEGO.yellow} x={52} y={260} w={186} h={72} label="base amarilla 4x2" />
           <LegoBlock color={LEGO.blue} x={99} y={140} w={92} h={92} label="azul 2x2" />
-          <div style={{ position: 'absolute', left: 36, right: 36, bottom: 28, fontSize: 12, fontWeight: 700, color: '#475569', textAlign: 'center' }}>
-            Cuando termines, pásala a Ensamble 2.
-          </div>
         </>
       )}
 
@@ -216,13 +210,10 @@ function ProductDiagram({ product, stage }: { product: Product; stage: 'alpha' |
             <GuideTag tone="add">ARMAR EN ALPHA</GuideTag>
           </div>
           <div style={{ position: 'absolute', left: 42, right: 42, top: 64, fontSize: 12, fontWeight: 800, color: '#475569', textAlign: 'center' }}>
-            Arma la base que recibirá Ensamble 2.
+            Arma esta base completa y pásala a Ensamble 2.
           </div>
           <LegoBlock color={LEGO.red} x={52} y={260} w={186} h={72} label="base roja 4x2" />
           <LegoBlock color={LEGO.yellow} x={99} y={140} w={92} h={92} label="amarillo 2x2" />
-          <div style={{ position: 'absolute', left: 36, right: 36, bottom: 28, fontSize: 12, fontWeight: 700, color: '#475569', textAlign: 'center' }}>
-            Cuando termines, pásala a Ensamble 2.
-          </div>
         </>
       )}
 
@@ -257,7 +248,6 @@ function ProductGuide({ product, stage }: { product: Product; stage: 'alpha' | '
       alpha: [
         'Arma la estructura base completa que recibirá Ensamble 2.',
         'Incluye: verde 2x2, rojo 2x2, verde 2x1 y amarillo 2x1.',
-        'Pasa la pieza a Ensamble 2.',
       ],
       beta: [
         'Recibe la estructura base ya armada por Alpha.',
@@ -269,7 +259,6 @@ function ProductGuide({ product, stage }: { product: Product; stage: 'alpha' | '
       alpha: [
         'Coloca la base amarilla 4x2.',
         'Coloca el bloque azul 2x2 al centro.',
-        'Pasa la pieza a Ensamble 2.',
       ],
       beta: [
         'Recibe la base amarilla con el bloque azul ya armados por Alpha.',
@@ -281,7 +270,6 @@ function ProductGuide({ product, stage }: { product: Product; stage: 'alpha' | '
       alpha: [
         'Coloca la base roja 4x2.',
         'Coloca el bloque amarillo 2x2 al centro.',
-        'Pasa la pieza a Ensamble 2.',
       ],
       beta: [
         'Recibe la base roja con el bloque amarillo ya armados por Alpha.',
