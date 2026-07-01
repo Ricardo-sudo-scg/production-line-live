@@ -4,7 +4,7 @@ export type Product = 'Bicolor' | 'Amarillo' | 'Rojo'
 export type OrderStatus =
   | 'pendiente' | 'en_planificacion' | 'ensamble1' | 'ensamble1_listo'
   | 'ensamble2' | 'ensamble2_listo' | 'esperando_horno' | 'en_horno'
-  | 'en_almacen' | 'entregado_ok' | 'entregado_tarde' | 'no_entregado'
+  | 'en_almacen' | 'entregado_ok' | 'entregado_tarde' | 'no_entregado' | 'stock_consumido'
 export type ClientVerdict = 'ok' | 'tarde' | 'no_entregado'
 export type OvenStatus = 'cargando' | 'procesando' | 'listo' | 'liberado'
 export type Role =
@@ -160,4 +160,5 @@ export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
   entregado_ok:     'Entregado ✓',
   entregado_tarde:  'Entregado tarde ⚠',
   no_entregado:     'No entregado ✗',
+  stock_consumido:  'Stock consumido',
 }
