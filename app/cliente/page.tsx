@@ -9,12 +9,15 @@ import {
   type Order, type PlayerSession, type Product,
 } from '../../lib/types'
 
+const MAX_CLIENT_ORDERS = 40
+
 export default function ClientePage() {
   const [session, setSession]         = useState<PlayerSession | null>(null)
   const [orders, setOrders]           = useState<Order[]>([])
   const [currentIdx, setCurrentIdx]   = useState(0)
   const [nextIn, setNextIn]           = useState(0)
   const [running, setRunning]         = useState(false)
+  const [demandFinished, setDemandFinished] = useState(false)
   const [intervalSec, setIntervalSec] = useState(20)
   const [vista, setVista]             = useState<'activa' | 'hoja'>('activa')
   const timerRef    = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -62,8 +65,10 @@ export default function ClientePage() {
     }
   }, [session, loadOrders])
 
-  // Línea A → T1, Línea B → T2 automático
-  const seq = session?.line === 'B' ? DEMAND_SEQUENCE_T2 : DEMAND_SEQUENCE_T1
+  // Línea A → T1, Línea B → T2 automático.
+  // El cliente solo genera como máximo 40 pedidos. La producción puede seguir operando después.
+  const baseSeq = session?.line === 'B' ? DEMAND_SEQUENCE_T2 : DEMAND_SEQUENCE_T1
+  const seq = baseSeq.slice(0, MAX_CLIENT_ORDERS)
 
   async function saveNpsScore(s: PlayerSession, score: 0 | 1 | 2) {
     await supabase.from('nps_responses').insert({
@@ -135,12 +140,22 @@ export default function ClientePage() {
     }
 
     stopDemand()
+    setDemandFinished(true)
+    setNextIn(0)
   }
 
   async function startDemand() {
     const s = sessionRef.current
     if (!s) return
 
+    // Si ya se generaron 40 pedidos, el cliente no genera más.
+    // La producción y el dashboard pueden seguir funcionando.
+    if (currentIdx >= MAX_CLIENT_ORDERS || currentIdx >= seq.length) {
+      await finishDemand()
+      return
+    }
+
+    setDemandFinished(false)
     setRunning(true)
     setNextIn(intervalSec)
     idxRef.current = currentIdx
@@ -235,18 +250,28 @@ export default function ClientePage() {
       {vista === 'activa' && (
         <>
           {!running ? (
-            <div className="card grid" style={{ marginBottom: 14 }}>
-              <h2>Configurar demanda</h2>
-              <p className="small">Línea {session.line} → Secuencia {session.line === 'A' ? 'T1' : 'T2'} (40 pedidos)</p>
-              <label>
-                Intervalo entre pedidos (segundos)
-                <input type="number" min={5} max={120} value={intervalSec}
-                  onChange={e => setIntervalSec(Number(e.target.value))} />
-              </label>
-              <button className="btn-full btn-success" style={{ fontSize: 18, minHeight: 56, marginTop: 8 }} onClick={startDemand}>
-                ▶ Iniciar demanda
-              </button>
-            </div>
+            demandFinished || currentIdx >= total ? (
+              <div className="card" style={{ marginBottom: 14, textAlign: 'center', background: '#f0fdf4', borderColor: '#86efac' }}>
+                <span className="badge badge-live">✅ Demanda finalizada</span>
+                <h2 style={{ marginTop: 10 }}>Cliente completó {total} pedidos</h2>
+                <p className="small">
+                  Ya no se generarán más pedidos. La producción puede seguir trabajando y el docente puede revisar los resultados.
+                </p>
+              </div>
+            ) : (
+              <div className="card grid" style={{ marginBottom: 14 }}>
+                <h2>Configurar demanda</h2>
+                <p className="small">Línea {session.line} → Secuencia {session.line === 'A' ? 'T1' : 'T2'} ({total} pedidos máximo)</p>
+                <label>
+                  Intervalo entre pedidos (segundos)
+                  <input type="number" min={5} max={120} value={intervalSec}
+                    onChange={e => setIntervalSec(Number(e.target.value))} />
+                </label>
+                <button className="btn-full btn-success" style={{ fontSize: 18, minHeight: 56, marginTop: 8 }} onClick={startDemand}>
+                  ▶ Iniciar demanda
+                </button>
+              </div>
+            )
           ) : (
             <div className="card" style={{ marginBottom: 14, textAlign: 'center' }}>
               <span className="badge badge-live" style={{ marginBottom: 8 }}>● Demanda activa</span>
