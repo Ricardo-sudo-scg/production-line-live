@@ -22,9 +22,7 @@ export default function HomePage() {
 
   useEffect(() => {
     const saved = getSession()
-    if (saved) {
-      setPreviousSession(saved)
-    }
+    if (saved) setPreviousSession(saved)
   }, [])
 
   function getRouteByRole(userRole: Role) {
@@ -76,7 +74,6 @@ export default function HomePage() {
     setError('')
 
     const rid = roomId.trim().toUpperCase()
-
     await ensureRoom(rid)
 
     const { data: player, error: pErr } = await supabase
@@ -117,7 +114,6 @@ export default function HomePage() {
     setError('')
 
     const rid = roomId.trim().toUpperCase()
-
     await ensureRoom(rid)
 
     const { data: player, error: pErr } = await supabase
@@ -158,7 +154,6 @@ export default function HomePage() {
     setError('')
 
     const rid = roomId.trim().toUpperCase()
-
     await ensureRoom(rid)
 
     const { data: player, error: pErr } = await supabase
