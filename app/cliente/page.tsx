@@ -18,10 +18,12 @@ export default function ClientePage() {
   const [nextIn, setNextIn] = useState(0)
   const [running, setRunning] = useState(false)
   const [demandFinished, setDemandFinished] = useState(false)
+  const [firstIntervalSec, setFirstIntervalSec] = useState(60)
   const [intervalSec, setIntervalSec] = useState(20)
   const [vista, setVista] = useState<'activa' | 'hoja'>('activa')
   const [msg, setMsg] = useState('')
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const firstTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const idxRef = useRef(0)
   const sessionRef = useRef<PlayerSession | null>(null)
@@ -137,39 +139,66 @@ export default function ClientePage() {
   async function startDemand() {
     const s = sessionRef.current
     if (!s) return
+
     if (currentIdx >= MAX_CLIENT_ORDERS || currentIdx >= seq.length) {
       await finishDemand()
       return
     }
+
     setDemandFinished(false)
     setRunning(true)
-    setNextIn(intervalSec)
+
     idxRef.current = currentIdx
-    await createOrder(s, idxRef.current)
-    idxRef.current++
-    setCurrentIdx(idxRef.current)
+
+    // Si todavía no existe el primer pedido, se espera el tiempo inicial.
+    // Si ya hubo pedidos y se reanuda, se usa el intervalo normal.
+    const firstDelay = currentIdx === 0 ? firstIntervalSec : intervalSec
+    setNextIn(firstDelay)
 
     countdownRef.current = setInterval(() => {
       setNextIn(prev => prev <= 1 ? intervalSec : prev - 1)
     }, 1000)
 
-    timerRef.current = setInterval(async () => {
+    async function createNextAndStartRegularTimer() {
       const sNow = sessionRef.current
       if (!sNow) return
-      const cur = idxRef.current
-      if (cur >= seq.length) {
+
+      const firstToCreate = idxRef.current
+
+      if (firstToCreate >= seq.length || firstToCreate >= MAX_CLIENT_ORDERS) {
         await finishDemand()
         return
       }
-      await createOrder(sNow, cur)
+
+      await createOrder(sNow, firstToCreate)
       idxRef.current++
       setCurrentIdx(idxRef.current)
       setNextIn(intervalSec)
-    }, intervalSec * 1000)
+
+      timerRef.current = setInterval(async () => {
+        const sTimer = sessionRef.current
+        if (!sTimer) return
+
+        const cur = idxRef.current
+
+        if (cur >= seq.length || cur >= MAX_CLIENT_ORDERS) {
+          await finishDemand()
+          return
+        }
+
+        await createOrder(sTimer, cur)
+        idxRef.current++
+        setCurrentIdx(idxRef.current)
+        setNextIn(intervalSec)
+      }, intervalSec * 1000)
+    }
+
+    firstTimeoutRef.current = setTimeout(createNextAndStartRegularTimer, firstDelay * 1000)
   }
 
   function stopDemand() {
     setRunning(false)
+    if (firstTimeoutRef.current) clearTimeout(firstTimeoutRef.current)
     if (timerRef.current) clearInterval(timerRef.current)
     if (countdownRef.current) clearInterval(countdownRef.current)
   }
@@ -239,8 +268,11 @@ export default function ClientePage() {
   const ok = withVerdict.filter(o => o.client_verdict === 'ok').length
   const tarde = withVerdict.filter(o => o.client_verdict === 'tarde').length
   const perdidos = withVerdict.filter(o => o.client_verdict === 'no_entregado').length
-  const currentProduct: Product | undefined = seq[currentIdx - 1]
   const total = seq.length
+  const pedidosHechosDb = orders.filter(o => o.sequence_number >= 1 && o.sequence_number <= total).length
+  const pedidosHechos = Math.min(total, Math.max(pedidosHechosDb, currentIdx))
+  const pedidosRestantes = Math.max(0, total - pedidosHechos)
+  const currentProduct: Product | undefined = seq[currentIdx - 1]
   const activeHadStock = !!activeOrder?.notes?.includes('stock_disponible_al_pedir')
   const deliveredByWarehouse = !!activeOrder?.notes?.includes('entregado_por_almacen')
 
@@ -253,6 +285,19 @@ export default function ClientePage() {
 
       {msg && <div className="alert alert-danger" style={{ marginBottom: 12 }}>{msg}</div>}
 
+      <div className="card" style={{ marginBottom: 14, padding: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, textAlign: 'center' }}>
+          <div>
+            <div style={{ fontSize: 28, fontWeight: 900, color: '#2563eb' }}>{pedidosHechos}/{total}</div>
+            <div className="small">Pedidos hechos</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 28, fontWeight: 900, color: '#0f172a' }}>{pedidosRestantes}</div>
+            <div className="small">Pedidos restantes</div>
+          </div>
+        </div>
+      </div>
+
       <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
         <button onClick={() => setVista('activa')}
           style={{ flex: 1, padding: '10px', borderRadius: 10, border: 'none', fontWeight: 700, fontSize: 13, cursor: 'pointer', background: vista === 'activa' ? '#2563eb' : '#e0e7ff', color: vista === 'activa' ? 'white' : '#1e40af' }}>
@@ -260,7 +305,7 @@ export default function ClientePage() {
         </button>
         <button onClick={() => setVista('hoja')}
           style={{ flex: 1, padding: '10px', borderRadius: 10, border: 'none', fontWeight: 700, fontSize: 13, cursor: 'pointer', background: vista === 'hoja' ? '#2563eb' : '#e0e7ff', color: vista === 'hoja' ? 'white' : '#1e40af' }}>
-          📋 Mis pedidos ({currentIdx}/{total})
+          📋 Mis pedidos ({pedidosHechos}/{total})
         </button>
       </div>
 
@@ -276,11 +321,34 @@ export default function ClientePage() {
             ) : (
               <div className="card grid" style={{ marginBottom: 14 }}>
                 <h2>Configurar demanda</h2>
-                <p className="small">Línea {session.line} → Secuencia {session.line === 'A' ? 'T1' : 'T2'} ({total} pedidos máximo)</p>
+                <p className="small">Línea {session.line} → Secuencia {session.line === 'A' ? 'T1' : 'T2'} · máximo {total} pedidos</p>
+
                 <label>
-                  Intervalo entre pedidos (segundos)
-                  <input type="number" min={5} max={120} value={intervalSec} onChange={e => setIntervalSec(Number(e.target.value))} />
+                  Tiempo hasta el primer pedido (segundos)
+                  <input
+                    type="number"
+                    min={5}
+                    max={180}
+                    value={firstIntervalSec}
+                    onChange={e => setFirstIntervalSec(Number(e.target.value))}
+                  />
                 </label>
+
+                <label>
+                  Intervalo entre los siguientes pedidos (segundos)
+                  <input
+                    type="number"
+                    min={5}
+                    max={120}
+                    value={intervalSec}
+                    onChange={e => setIntervalSec(Number(e.target.value))}
+                  />
+                </label>
+
+                <p className="small">
+                  Ejemplo: primer pedido en {firstIntervalSec}s; luego un pedido cada {intervalSec}s.
+                </p>
+
                 <button className="btn-full btn-success" style={{ fontSize: 18, minHeight: 56, marginTop: 8 }} onClick={startDemand}>
                   ▶ Iniciar demanda
                 </button>
@@ -289,9 +357,9 @@ export default function ClientePage() {
           ) : (
             <div className="card" style={{ marginBottom: 14, textAlign: 'center' }}>
               <span className="badge badge-live" style={{ marginBottom: 8 }}>● Demanda activa</span>
-              <div style={{ fontSize: 12, color: '#64748b', marginBottom: 4 }}>Pedido <strong>{currentIdx}</strong> de <strong>{total}</strong></div>
+              <div style={{ fontSize: 12, color: '#64748b', marginBottom: 4 }}>Pedidos hechos: <strong>{pedidosHechos}</strong> de <strong>{total}</strong></div>
               {currentProduct && <div style={{ fontSize: 52, fontWeight: 800, color: PRODUCT_COLOR[currentProduct], margin: '8px 0' }}>{currentProduct}</div>}
-              <p className="small">Próximo pedido en</p>
+              <p className="small">{currentIdx === 0 ? 'Primer pedido en' : 'Próximo pedido en'}</p>
               <div style={{ fontSize: 40, fontWeight: 800, fontVariantNumeric: 'tabular-nums', color: '#0f172a' }}>{nextIn}s</div>
               <button className="btn-ghost btn-full" style={{ marginTop: 10, fontSize: 13 }} onClick={stopDemand}>⏹ Pausar</button>
             </div>
